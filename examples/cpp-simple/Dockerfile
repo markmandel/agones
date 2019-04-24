@@ -28,11 +28,11 @@ RUN cmake --version
 RUN cd sdk && mkdir -p .build && \
     cd .build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" -Wno-dev && \
-    cmake --build .
+    cmake --build . --target install
 
 RUN cd cpp-simple && mkdir -p .build && \
     cd .build && \
-    cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release && -DCMAKE_PREFIX_PATH=/project/sdk/.build \
+    cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release && \
     cmake --build .
 
 FROM debian:stretch
