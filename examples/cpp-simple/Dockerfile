@@ -38,10 +38,9 @@ RUN cd cpp-simple && mkdir -p .build && \
 FROM debian:stretch
 RUN useradd -m server
 
-COPY --from=builder /project/cpp-simple/.build/server-static /home/server/server
-COPY ./bin/server-static /home/server/server-static
+COPY --from=builder /project/cpp-simple/.build/cpp-simple /home/server/server
 RUN chown -R server /home/server && \
-    chmod o+x /home/server/server-static
+    chmod o+x /home/server/cpp-simple
 
 USER server
-ENTRYPOINT /home/server/server-static
+ENTRYPOINT /home/server/cpp-simple
