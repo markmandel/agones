@@ -17,7 +17,6 @@ FROM gcc:8 as builder
 WORKDIR /project
 
 COPY ./sdks/cpp sdk
-COPY ./examples/cpp-simple cpp-simple
 
 ADD https://cmake.org/files/v3.14/cmake-3.14.1-Linux-x86_64.sh /cmake-3.14.1-Linux-x86_64.sh
 RUN mkdir /opt/cmake
@@ -30,15 +29,17 @@ RUN cd sdk && mkdir -p .build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" -Wno-dev && \
     cmake --build . --target install
 
+COPY ./examples/cpp-simple cpp-simple
+
 RUN cd cpp-simple && mkdir -p .build && \
     cd .build && \
-    cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build .
+    cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=.bin && \
+    cmake --build . --target install
 
 FROM debian:stretch
 RUN useradd -m server
 
-COPY --from=builder /project/cpp-simple/.build/cpp-simple /home/server/cpp-simple
+COPY --from=builder /project/cpp-simple/.build/.bin /home/server/cpp-simple
 RUN chown -R server /home/server && \
     chmod o+x /home/server/cpp-simple
 

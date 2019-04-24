@@ -23,10 +23,6 @@
 #     \_/ \__,_|_|  |_|\__,_|_.__/|_|\___|___/
 #
 
-CXX = g++
-CPPFLAGS += -I/usr/local/include -pthread
-CXXFLAGS += -std=c++11
-LDFLAGS += -L/usr/local/lib -lagonessdk -lgrpc++_unsecure -lgrpc -lprotobuf -lpthread -ldl
 REPOSITORY = gcr.io/agones-images
 
 # Directory that this Makefile is in.
@@ -42,25 +38,16 @@ root_path = $(realpath $(project_path)/../..)
 #    |_|\__,_|_|  \__, |\___|\__|___/
 #                 |___/
 
-# build the library
-build: ensure-bin server-dynamic server-static
+# build the cpp-simple binary
+build:
+	cd $(project_path) && mkdir -p .build && \
+	cd .build && \
+	cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=.bin -DCMAKE_PREFIX_PATH=$(root_path)/sdks/cpp/.build/.install && \
+	cmake --build . --target install
 
 # Build a docker image for the server, and tag it
 build-image:
 	cd $(root_path) && docker build -f $(project_path)/Dockerfile --tag=$(server_tag) .
 
-# make the server executable
-server-dynamic: server.o
-	$(CXX) $^ $(LDFLAGS) -o $(project_path)bin/$@
-
-# make the server executable
-server-static: server.o
-	$(CXX) $^ $(LDFLAGS) -o $(project_path)bin/$@ -static
-
-# make sure the bin directory exists
-ensure-bin:
-	-mkdir $(project_path)/bin
-
 clean:
-	-rm -r $(project_path)/bin
-	-rm *.o
+	-rm -r $(project_path)/.build
