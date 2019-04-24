@@ -32,7 +32,7 @@ RUN cd sdk && mkdir -p .build && \
 
 RUN cd cpp-simple && mkdir -p .build && \
     cd .build && \
-    cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release && \
+    cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release && -DCMAKE_PREFIX_PATH=/project/sdk/.build \
     cmake --build .
 
 FROM debian:stretch
