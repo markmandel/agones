@@ -19,6 +19,52 @@ option go_package = "alpha";
 
 import "google/api/annotations.proto";
 
+// A representation of a book in the library.
+message Player {
+    option (google.api.resource) = {
+        type: "agones.dev/Player"
+        pattern: "players/{player}"
+    };
+
+    // The resource name/unique player id for the player.
+    string name = 1;
+}
+
+message CreatePlayerRequest {
+    Player player = 1 [(google.api.field_behavior) = REQUIRED];
+    string player_id = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+message DeletePlayerRequest {
+    string name = 1 [
+                    (google.api.field_behavior) = REQUIRED,
+                    (google.api.resource_reference) = {
+          type: "agones.dev/Player"
+        }];
+}
+
+message ListPlayersRequest {
+    // The maximum number of players to return. The service may return fewer than
+    // this value.
+    // If unspecified, at most 1000 players will be returned.
+    int32 page_size = 1;
+    string page_token = 2;
+}
+
+message ListPlayersResponse {
+    repeated Player players = 1;
+    string next_page_token = 2;
+    int32 total_size = 3;
+}
+
+message GetPlayerRequest {
+    string name = 1 [
+                    (google.api.field_behavior) = REQUIRED,
+                    (google.api.resource_reference) = {
+      type: "agones.dev/Player"
+    }];
+}
+
 // SDK service to be used in the GameServer SDK to the Pod Sidecar.
 service SDK {
     // CreatePlayer increases the SDK’s stored player count by one, and appends this Player's unique name to GameServer.Status.Players.IDs.
@@ -39,33 +85,55 @@ service SDK {
     // through the Kubernetes API, as indeterminate results will occur.
     rpc CreatePlayer(CreatePlayerRequest) returns (Player) {
         option (google.api.http) = {
-            post: "/v1alphav1/players"
+            post: "/v1alpha1/players"
         };
+
+        option (google.api.method_signature) = "player";
     }
 
-    message CreatePlayerRequest {
-        Player player = 1 [(google.api.field_behavior) = REQUIRED];
-        string player_id = 2 [(google.api.field_behavior) = REQUIRED];
-    }
-
-    // Decreases the SDK’s stored player count by one, and removes the playerID from GameServer.Status.Players.IDs.
+    // Decreases the SDK’s stored player count by one, and removes the Player from GameServer.Status.Players.IDs.
     //
     // GameServer.Status.Players.Count and GameServer.Status.Players.IDs are then set to update the player count and id list a second from now,
     // unless there is already an update pending, in which case the update joins that batch operation.
     //
-    // PlayerDisconnect will return true and remove the supplied playerID from the list of connected playerIDs if the
-    // playerID value exists within the list.
+    // DeletePlayer will succeed and remove the supplied Player from the list of connected Players if the
+    // Player's value exists within the list.
     //
-    // If the playerID was not in the list of connected playerIDs, the call will return false, and the connected playerID list
-    // will be left unchanged.
+    // If the Player was not in the list of connected Player, the call will return error with a status of NOT_FOUND,
+    // and the connected Player list will be left unchanged.
     //
     // Warning: Do not use this method if you are manually managing GameServer.status.players.IDs and GameServer.status.players.Count
     // through the Kubernetes API, as indeterminate results will occur.
-    rpc PlayerDisconnect (PlayerID) returns (Bool) {
+    rpc DeletePlayer(DeletePlayerRequest) returns (google.protobuf.Empty) {
         option (google.api.http) = {
-            post: "/alpha/player/disconnect"
-            body: "*"
+            delete: "/v1alpha1/{name=players/*}"
+          };
+        option (google.api.method_signature) = "name";
+    }
+
+    // Returns the list of the currently connected Players. This is always accurate from what has been set through this SDK,
+    // even if the value has yet to be updated on the GameServer status resource.
+    //
+    // The current player count is included in the response. This is always accurate from what has been set through this SDK,
+    // even if the value has yet to be updated on the GameServer status resource.
+    //
+    // If GameServer.Status.Players.IDs is set manually through the Kubernetes API, use SDK.GameServer() or SDK.WatchGameServer() instead to view this value.
+    rpc ListPlayers(ListPlayersRequest) returns (ListPlayersResponse) {
+        option (google.api.http) = {
+            get: "/v1alpha1/players"
         };
+    }
+
+    // Get the Player. This is always accurate from what has been set through this SDK,
+    // even if the value has yet to be updated on the GameServer status resource.
+    // If the Player does not exist, then an error of NOT_FOUND is returned.
+    //
+    // If GameServer.Status.Players.IDs is set manually through the Kubernetes API, use SDK.GameServer() or SDK.WatchGameServer() instead to determine connected status.
+    rpc GetPlayer(GetPlayerRequest) returns (Player) {
+        option (google.api.http) = {
+            get: "/v1/{name=players/*}"
+        };
+        option (google.api.method_signature) = "name";
     }
 
     // Update the GameServer.Status.Players.Capacity value with a new capacity.
@@ -85,64 +153,9 @@ service SDK {
             get: "/alpha/player/capacity"
         };
     }
-
-    // Retrieves the current player count. This is always accurate from what has been set through this SDK,
-    // even if the value has yet to be updated on the GameServer status resource.
-    //
-    // If GameServer.Status.Players.Count is set manually through the Kubernetes API, use SDK.GameServer() or SDK.WatchGameServer() instead to view this value.
-    rpc GetPlayerCount (Empty) returns (Count) {
-        option (google.api.http) = {
-            get: "/alpha/player/count"
-        };
-    }
-
-    // Returns if the playerID is currently connected to the GameServer. This is always accurate from what has been set through this SDK,
-    // even if the value has yet to be updated on the GameServer status resource.
-    //
-    // If GameServer.Status.Players.IDs is set manually through the Kubernetes API, use SDK.GameServer() or SDK.WatchGameServer() instead to determine connected status.
-    rpc IsPlayerConnected (PlayerID) returns (Bool) {
-        option (google.api.http) = {
-            get: "/alpha/player/connected/{playerID}"
-        };
-    }
-
-    // Returns the list of the currently connected player ids. This is always accurate from what has been set through this SDK,
-    // even if the value has yet to be updated on the GameServer status resource.
-    //
-    // If GameServer.Status.Players.IDs is set manually through the Kubernetes API, use SDK.GameServer() or SDK.WatchGameServer() instead to view this value.
-    rpc GetConnectedPlayers (Empty) returns (PlayerIDList) {
-        option (google.api.http) = {
-            get: "/alpha/player/connected"
-        };
-    }
-}
-
-// I am Empty
-message Empty {
 }
 
 // Store a count variable.
 message Count {
     int64 count = 1;
-}
-
-// Store a boolean result
-message Bool {
-    bool bool = 1;
-}
-
-// List of Player IDs
-message PlayerIDList {
-    repeated string list = 1;
-}
-
-// A representation of a book in the library.
-message Player {
-    option (google.api.resource) = {
-        type: "agones.dev/Player"
-        pattern: "players/{player}"
-    };
-
-    // The resource name/unique player id for the player.
-    string name = 1;
 }
