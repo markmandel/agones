@@ -21,27 +21,31 @@ import "google/api/annotations.proto";
 
 // SDK service to be used in the GameServer SDK to the Pod Sidecar.
 service SDK {
-    // PlayerConnect increases the SDK’s stored player count by one, and appends this playerID to GameServer.Status.Players.IDs.
+    // CreatePlayer increases the SDK’s stored player count by one, and appends this Player's unique name to GameServer.Status.Players.IDs.
     //
     // GameServer.Status.Players.Count and GameServer.Status.Players.IDs are then set to update the player count and id list a second from now,
     // unless there is already an update pending, in which case the update joins that batch operation.
     //
-    // PlayerConnect returns true and adds the playerID to the list of playerIDs if this playerID was not already in the
-    // list of connected playerIDs.
+    // CreatePlayer returns the Player and adds the Player to the list of Players if this Player was not already in the
+    // list of connected Players.
     //
-    // If the playerID exists within the list of connected playerIDs, PlayerConnect will return false, and the list of
-    // connected playerIDs will be left unchanged.
+    // If the Player exists within the list of connected Players, CreatePlayer will return the error ALREADY_EXISTS, and the list of
+    // connected Players will be left unchanged.
     //
-    // An error will be returned if the playerID was not already in the list of connected playerIDs but the player capacity for
-    // the server has been reached. The playerID will not be added to the list of playerIDs.
+    // The error OUT_OF_RANGE will be returned if the Player was not already in the list of connected Players but the
+    // player capacity for the server has been reached. The Player will not be added to the list.
     //
     // Warning: Do not use this method if you are manually managing GameServer.Status.Players.IDs and GameServer.Status.Players.Count
     // through the Kubernetes API, as indeterminate results will occur.
-    rpc PlayerConnect (PlayerID) returns (Bool) {
+    rpc CreatePlayer(CreatePlayerRequest) returns (Player) {
         option (google.api.http) = {
-            post: "/alpha/player/connect"
-            body: "*"
+            post: "/v1alphav1/players"
         };
+    }
+
+    message CreatePlayerRequest {
+        Player player = 1 [(google.api.field_behavior) = REQUIRED];
+        string player_id = 2 [(google.api.field_behavior) = REQUIRED];
     }
 
     // Decreases the SDK’s stored player count by one, and removes the playerID from GameServer.Status.Players.IDs.
@@ -106,7 +110,7 @@ service SDK {
     // even if the value has yet to be updated on the GameServer status resource.
     //
     // If GameServer.Status.Players.IDs is set manually through the Kubernetes API, use SDK.GameServer() or SDK.WatchGameServer() instead to view this value.
-    rpc GetConnectedPlayers(Empty) returns (PlayerIDList) {
+    rpc GetConnectedPlayers (Empty) returns (PlayerIDList) {
         option (google.api.http) = {
             get: "/alpha/player/connected"
         };
@@ -127,12 +131,18 @@ message Bool {
     bool bool = 1;
 }
 
-// The unique identifier for a given player.
-message PlayerID {
-    string playerID = 1;
-}
-
 // List of Player IDs
 message PlayerIDList {
     repeated string list = 1;
+}
+
+// A representation of a book in the library.
+message Player {
+    option (google.api.resource) = {
+        type: "agones.dev/Player"
+        pattern: "players/{player}"
+    };
+
+    // The resource name/unique player id for the player.
+    string name = 1;
 }
