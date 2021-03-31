@@ -44,8 +44,12 @@ const (
 	// NodeExternalDNS is a feature flag to enable/disable node ExternalDNS and InternalDNS use as GameServer address
 	NodeExternalDNS Feature = "NodeExternalDNS"
 
+	// TOXO: write documentation for StateAllocationFilter
+
 	// FeatureStateAllocationFilter is a feature flag that enables state filtering on Allocation.
 	FeatureStateAllocationFilter Feature = "StateAllocationFilter"
+
+	// TOXO: write documentation for PlayerAllocationFilter
 
 	// FeaturePlayerAllocationFilter is a feature flag that enables the ability for Allocations to filter based on
 	// player capacity.
