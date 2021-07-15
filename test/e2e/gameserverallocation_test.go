@@ -141,7 +141,7 @@ func TestCreateFleetAndGameServerStateFilterAllocation(t *testing.T) {
 	assert.Equal(t, gs1.ObjectMeta.Name, gsa.Status.GameServerName)
 }
 
-func TestCreateFleetAmdGameServerPlayerCapacityAllocation(t *testing.T) {
+func TestCreateFleetAndGameServerPlayerCapacityAllocation(t *testing.T) {
 	if !(runtime.FeatureEnabled(runtime.FeatureStateAllocationFilter) && runtime.FeatureEnabled(runtime.FeaturePlayerAllocationFilter)) {
 		// TOXO: add this back in before submitting as PR.
 		println("add this back in before submitting as PR.")

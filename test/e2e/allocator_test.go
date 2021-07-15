@@ -32,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	"agones.dev/agones/pkg/util/runtime"
 	"github.com/stretchr/testify/require"
 
 	pb "agones.dev/agones/pkg/allocation/go"
@@ -79,6 +80,7 @@ func TestAllocator(t *testing.T) {
 		Metadata:                     &pb.MetaPatch{Labels: map[string]string{"gslabel": "allocatedbytest"}},
 	}
 
+	var response *pb.AllocationResponse
 	// wait for the allocation system to come online
 	err = wait.PollImmediate(2*time.Second, 5*time.Minute, func() (bool, error) {
 		// create the grpc client each time, as we may end up looking at an old cert
@@ -95,12 +97,27 @@ func TestAllocator(t *testing.T) {
 		defer conn.Close() // nolint: errcheck
 
 		grpcClient := pb.NewAllocationServiceClient(conn)
-		response, err := grpcClient.Allocate(context.Background(), request)
+		response, err = grpcClient.Allocate(context.Background(), request)
 		if err != nil {
 			logrus.WithError(err).Info("failing Allocate request")
 			return false, nil
 		}
 		validateAllocatorResponse(t, response)
+
+		// let's do a re-allocation
+		// TOXO: remove! before submitting as PR.
+		if !runtime.FeatureEnabled(runtime.FeatureStateAllocationFilter) {
+			println("remove! before submitting as PR.")
+
+			request.PreferredGameServerSelectors[0].GameServerState = pb.GameServerSelector_ALLOCATED
+			allocatedResponse, err := grpcClient.Allocate(context.Background(), request)
+			require.NoError(t, err)
+			require.Equal(t, response.GameServerName, allocatedResponse.GameServerName)
+			validateAllocatorResponse(t, allocatedResponse)
+		}
+
+		// TOXO: (work from here) let's do a player capacity allocation
+
 		return true, nil
 	})
 
@@ -343,8 +360,13 @@ func getTLSConfig(ctx context.Context, namespace, clientSecretName string, tlsCA
 }
 
 func createFleet(ctx context.Context, namespace string) (*agonesv1.Fleet, error) {
+	return createFleetWithOpts(ctx, namespace, func(*agonesv1.Fleet) {})
+}
+
+func createFleetWithOpts(ctx context.Context, namespace string, opts func(fleet *agonesv1.Fleet)) (*agonesv1.Fleet, error) {
 	fleets := framework.AgonesClient.AgonesV1().Fleets(namespace)
 	fleet := defaultFleet(namespace)
+	opts(fleet)
 	return fleets.Create(ctx, fleet, metav1.CreateOptions{})
 }
 
