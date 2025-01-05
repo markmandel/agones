@@ -70,6 +70,9 @@ const (
 	////////////////
 	// Dev features
 
+	// FeatureSidecarContainers is a feature flag to enable/disable k8s sidecar containers for the sdkserver
+	FeatureSidecarContainers = "SidecarContainers"
+
 	////////////////
 	// Example feature
 
@@ -142,6 +145,7 @@ var (
 		FeatureScheduledAutoscaler:    false,
 
 		// Dev features
+		FeatureSidecarContainers: false,
 
 		// Example feature
 		FeatureExample: false,
