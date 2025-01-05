@@ -1386,6 +1386,32 @@ func TestGameServerPodContainerNotFoundErrReturned(t *testing.T) {
 
 func TestGameServerPodWithSidecarNoErrors(t *testing.T) {
 	t.Parallel()
+	runtime.FeatureTestMutex.Lock()
+	defer runtime.FeatureTestMutex.Unlock()
+	require.NoError(t, runtime.ParseFeatures(string(runtime.FeatureSidecarContainers)+"=false"))
+
+	fixture := defaultGameServer()
+	fixture.ApplyDefaults()
+
+	sidecar := corev1.Container{Name: "sidecar", Image: "container/sidecar"}
+	fixture.Spec.Template.Spec.ServiceAccountName = "other-agones-sdk"
+	pod, err := fixture.Pod(fakeAPIHooks{}, sidecar)
+	assert.Nil(t, err, "Pod should not return an error")
+	assert.Equal(t, fixture.ObjectMeta.Name, pod.ObjectMeta.Name)
+	assert.Len(t, pod.Spec.Containers, 2, "Should have two containers")
+	assert.Equal(t, "other-agones-sdk", pod.Spec.ServiceAccountName)
+	assert.Equal(t, "sidecar", pod.Spec.Containers[0].Name)
+	assert.Equal(t, "container", pod.Spec.Containers[1].Name)
+	assert.True(t, metav1.IsControlledBy(pod, fixture))
+}
+
+// TOXO: fix this test
+func TestGameServerPodWithInitSidecarNoErrors(t *testing.T) {
+	t.Parallel()
+	runtime.FeatureTestMutex.Lock()
+	defer runtime.FeatureTestMutex.Unlock()
+	require.NoError(t, runtime.ParseFeatures(string(runtime.FeatureSidecarContainers)+"=true"))
+
 	fixture := defaultGameServer()
 	fixture.ApplyDefaults()
 
