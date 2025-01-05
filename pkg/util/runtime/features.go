@@ -67,11 +67,11 @@ const (
 	// FeatureScheduledAutoscaler is a feature flag to enable/disable scheduled fleet autoscaling.
 	FeatureScheduledAutoscaler Feature = "ScheduledAutoscaler"
 
-	////////////////
-	// Dev features
-
 	// FeatureSidecarContainers is a feature flag to enable/disable k8s sidecar containers for the sdkserver
 	FeatureSidecarContainers = "SidecarContainers"
+
+	////////////////
+	// Dev features
 
 	////////////////
 	// Example feature
@@ -143,9 +143,9 @@ var (
 		FeaturePortRanges:             false,
 		FeaturePortPolicyNone:         false,
 		FeatureScheduledAutoscaler:    false,
+		FeatureSidecarContainers:      false,
 
 		// Dev features
-		FeatureSidecarContainers: false,
 
 		// Example feature
 		FeatureExample: false,
