@@ -1468,6 +1468,8 @@ func (s *SDKServer) updateConnectedPlayers(ctx context.Context) error {
 // NewSDKServerContext returns a Context that cancels when SIGTERM or os.Interrupt
 // is received and the GameServer's Status is shutdown
 func (s *SDKServer) NewSDKServerContext(ctx context.Context) context.Context {
+	// TOXO: (SidecarContainers) when SidecarContainers is enabled, no need to wait for shutdown.
+
 	sdkCtx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-ctx.Done()

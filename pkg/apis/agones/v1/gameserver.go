@@ -745,6 +745,10 @@ func (gs *GameServer) Pod(apiHooks APIHooks, sidecars ...corev1.Container) (*cor
 		Spec:       *gs.Spec.Template.Spec.DeepCopy(),
 	}
 
+	// TOXO: (SidecarContainers) restart: Never
+	// TOXO: (SidecarContainers) move sidecars to initContainers (restart: Always)
+	// TOXO: (SidecarContainers) Update docs! (features.md, health checking, sidecar shutdowwn reference?).
+
 	if len(pod.Spec.Hostname) == 0 {
 		// replace . with - since it must match RFC 1123
 		pod.Spec.Hostname = strings.ReplaceAll(gs.ObjectMeta.Name, ".", "-")

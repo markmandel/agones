@@ -129,6 +129,8 @@ func NewController(
 	gameServers := agonesInformerFactory.Agones().V1().GameServers()
 	gsInformer := gameServers.Informer()
 
+	// TOXO: (SidecarContainers) health controller, might be able to be deleted?
+
 	c := &Controller{
 		controllerHooks:        controllerHooks,
 		sidecarImage:           sidecarImage,
