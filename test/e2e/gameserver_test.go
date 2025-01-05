@@ -1650,6 +1650,8 @@ func TestLists(t *testing.T) {
 	}
 }
 
+// TOXO: do any upadtes that are needed for sidecar
+
 func TestGracefulShutdown(t *testing.T) {
 	t.Parallel()
 

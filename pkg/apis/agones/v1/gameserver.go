@@ -745,8 +745,6 @@ func (gs *GameServer) Pod(apiHooks APIHooks, sidecars ...corev1.Container) (*cor
 		Spec:       *gs.Spec.Template.Spec.DeepCopy(),
 	}
 
-	// TOXO: (SidecarContainers) restart: Never
-	// TOXO: (SidecarContainers) move sidecars to initContainers (restart: Always)
 	// TOXO: (SidecarContainers) Update docs! (features.md, health checking, sidecar shutdowwn reference?).
 
 	if len(pod.Spec.Hostname) == 0 {
@@ -792,7 +790,6 @@ func (gs *GameServer) Pod(apiHooks APIHooks, sidecars ...corev1.Container) (*cor
 		pod.ObjectMeta.Annotations[PassthroughPortAssignmentAnnotation] = string(containerToPassthroughMapJSON)
 	}
 
-	// TOXO: write unit tests for this.
 	if runtime.FeatureEnabled(runtime.FeatureSidecarContainers) {
 		// addSidecarsAsInitContainers puts the sidecars in the initContainers list so that they can have their own independent
 		// container restart policies.

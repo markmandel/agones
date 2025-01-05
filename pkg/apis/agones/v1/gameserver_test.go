@@ -1420,11 +1420,12 @@ func TestGameServerPodWithInitSidecarNoErrors(t *testing.T) {
 	pod, err := fixture.Pod(fakeAPIHooks{}, sidecar)
 	assert.Nil(t, err, "Pod should not return an error")
 	assert.Equal(t, fixture.ObjectMeta.Name, pod.ObjectMeta.Name)
-	assert.Len(t, pod.Spec.Containers, 2, "Should have two containers")
+	assert.Len(t, pod.Spec.Containers, 1, "Should have one containers")
 	assert.Equal(t, "other-agones-sdk", pod.Spec.ServiceAccountName)
-	assert.Equal(t, "sidecar", pod.Spec.Containers[0].Name)
-	assert.Equal(t, "container", pod.Spec.Containers[1].Name)
+	assert.Equal(t, "sidecar", pod.Spec.InitContainers[0].Name)
+	assert.Equal(t, "container", pod.Spec.Containers[0].Name)
 	assert.True(t, metav1.IsControlledBy(pod, fixture))
+	assert.Equal(t, pod.Spec.RestartPolicy, corev1.RestartPolicyNever)
 }
 
 func TestGameServerPodWithMultiplePortAllocations(t *testing.T) {
