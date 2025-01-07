@@ -1405,7 +1405,6 @@ func TestGameServerPodWithSidecarNoErrors(t *testing.T) {
 	assert.True(t, metav1.IsControlledBy(pod, fixture))
 }
 
-// TOXO: fix this test
 func TestGameServerPodWithInitSidecarNoErrors(t *testing.T) {
 	t.Parallel()
 	runtime.FeatureTestMutex.Lock()

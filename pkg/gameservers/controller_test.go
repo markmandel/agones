@@ -1424,6 +1424,8 @@ func TestControllerSyncGameServerRequestReadyState(t *testing.T) {
 	nodeName := "node"
 	containerID := "1234"
 
+	// TOXO: turn off runtime.FeatureEnabled(runtime.FeatureSidecarContainers) and see things break.
+
 	t.Run("GameServer with ReadyRequest State", func(t *testing.T) {
 		c, m := newFakeController()
 

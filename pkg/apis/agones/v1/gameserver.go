@@ -139,6 +139,9 @@ const (
 	// DevAddressAnnotation is an annotation to indicate that a GameServer hosted outside of Agones.
 	// A locally hosted GameServer is not managed by Agones it is just simply registered.
 	DevAddressAnnotation = "agones.dev/dev-address"
+
+	// TOXO: look for whatever else uses GameServerReadyContainerIDAnnotation and adjust things as necessary.
+
 	// GameServerReadyContainerIDAnnotation is an annotation that is set on the GameServer
 	// becomes ready, so we can track when restarts should occur and when a GameServer
 	// should be moved to Unhealthy.

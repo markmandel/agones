@@ -107,6 +107,8 @@ func NewHealthController(
 // isUnhealthy returns if the Pod event is going
 // to cause the GameServer to become Unhealthy
 func (hc *HealthController) isUnhealthy(pod *corev1.Pod) bool {
+	// TOXO: I _think_ whenSideCar, this just becmes the first two, not the third?
+
 	return hc.evictedPod(pod) || hc.unschedulableWithNoFreePorts(pod) || hc.failedContainer(pod)
 }
 
@@ -217,6 +219,7 @@ func (hc *HealthController) syncGameServer(ctx context.Context, key string) erro
 	}
 
 	// Make sure that the pod has to be marked unhealthy
+	// TOXO: work through this. I think if SideCarCOntainer, skipUnhealthyGameContainer should always return false.
 	if pod != nil {
 		if skip, err := hc.skipUnhealthyGameContainer(gs, pod); err != nil || skip {
 			return err
@@ -241,6 +244,8 @@ func (hc *HealthController) syncGameServer(ctx context.Context, key string) erro
 
 	return nil
 }
+
+// TOXO: for SideCarContainers, this whole function probably makes no sense?
 
 // skipUnhealthyGameContainer determines if it's appropriate to not move to Unhealthy when a Pod's
 // gameserver container has crashed, or let it restart as per usual K8s operations.
