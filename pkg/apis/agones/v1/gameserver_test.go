@@ -1422,6 +1422,7 @@ func TestGameServerPodWithInitSidecarNoErrors(t *testing.T) {
 	assert.Len(t, pod.Spec.Containers, 1, "Should have one containers")
 	assert.Equal(t, "other-agones-sdk", pod.Spec.ServiceAccountName)
 	assert.Equal(t, "sidecar", pod.Spec.InitContainers[0].Name)
+	assert.Equal(t, corev1.ContainerRestartPolicyAlways, *pod.Spec.InitContainers[0].RestartPolicy)
 	assert.Equal(t, "container", pod.Spec.Containers[0].Name)
 	assert.True(t, metav1.IsControlledBy(pod, fixture))
 	assert.Equal(t, pod.Spec.RestartPolicy, corev1.RestartPolicyNever)

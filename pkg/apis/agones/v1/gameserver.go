@@ -794,6 +794,13 @@ func (gs *GameServer) Pod(apiHooks APIHooks, sidecars ...corev1.Container) (*cor
 	}
 
 	if runtime.FeatureEnabled(runtime.FeatureSidecarContainers) {
+		// make sure all sidecars have a restart policy of Always, so they are valid side car containers.
+		// https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/#sidecar-containers-and-pod-lifecycle
+		always := corev1.ContainerRestartPolicyAlways
+		for i := range sidecars {
+			sidecars[i].RestartPolicy = &always
+		}
+
 		// addSidecarsAsInitContainers puts the sidecars in the initContainers list so that they can have their own independent
 		// container restart policies.
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, sidecars...)
