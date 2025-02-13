@@ -955,11 +955,9 @@ func (c *Controller) syncGameServerRequestReadyState(ctx context.Context, gs *ag
 		}
 	}
 
-	if !runtime.FeatureEnabled(runtime.FeatureSidecarContainers) {
-		gsCopy, err = c.applyGameServerReadyContainerIDAnnotation(ctx, gsCopy, pod)
-		if err != nil {
-			return gs, err
-		}
+	gsCopy, err = c.applyGameServerReadyContainerIDAnnotation(ctx, gsCopy, pod)
+	if err != nil {
+		return gs, err
 	}
 
 	gsCopy.Status.State = agonesv1.GameServerStateReady
@@ -978,6 +976,11 @@ func (c *Controller) syncGameServerRequestReadyState(ctx context.Context, gs *ag
 // applyGameServerReadyContainerIDAnnotation updates the GameServer and its corresponding Pod with an annotation
 // indicating the ID of the container that is running the game server, once it's in a Running state.
 func (c *Controller) applyGameServerReadyContainerIDAnnotation(ctx context.Context, gsCopy *agonesv1.GameServer, pod *corev1.Pod) (*agonesv1.GameServer, error) {
+	// if there is a sidecar container, we escape right away. On move to stable, this method can be deleted.
+	if runtime.FeatureEnabled(runtime.FeatureSidecarContainers) {
+		return gsCopy, nil
+	}
+
 	// track the ready gameserver container, so we can determine that after this point, we should move to Unhealthy
 	// if there is a container crash/restart after we move to Ready
 	for _, cs := range pod.Status.ContainerStatuses {
