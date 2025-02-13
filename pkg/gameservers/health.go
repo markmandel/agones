@@ -107,8 +107,6 @@ func NewHealthController(
 // isUnhealthy returns if the Pod event is going
 // to cause the GameServer to become Unhealthy
 func (hc *HealthController) isUnhealthy(pod *corev1.Pod) bool {
-	// TOXO: I _think_ whenSideCar, this just becmes the first two, not the third?
-
 	return hc.evictedPod(pod) || hc.unschedulableWithNoFreePorts(pod) || hc.failedContainer(pod)
 }
 
@@ -143,6 +141,12 @@ func (hc *HealthController) evictedPod(pod *corev1.Pod) bool {
 // failedContainer checks each container, and determines if the main gameserver
 // container has failed
 func (hc *HealthController) failedContainer(pod *corev1.Pod) bool {
+	// return false, since there is no gameserver restart before ready. When this graduates, you can delete this
+	// whole function.
+	if runtime.FeatureEnabled(runtime.FeatureSidecarContainers) {
+		return false
+	}
+
 	container := pod.Annotations[agonesv1.GameServerContainerAnnotation]
 	for _, cs := range pod.Status.ContainerStatuses {
 		if cs.Name == container {
@@ -219,7 +223,6 @@ func (hc *HealthController) syncGameServer(ctx context.Context, key string) erro
 	}
 
 	// Make sure that the pod has to be marked unhealthy
-	// TOXO: work through this. I think if SideCarCOntainer, skipUnhealthyGameContainer should always return false.
 	if pod != nil {
 		if skip, err := hc.skipUnhealthyGameContainer(gs, pod); err != nil || skip {
 			return err
@@ -245,8 +248,6 @@ func (hc *HealthController) syncGameServer(ctx context.Context, key string) erro
 	return nil
 }
 
-// TOXO: for SideCarContainers, this whole function probably makes no sense?
-
 // skipUnhealthyGameContainer determines if it's appropriate to not move to Unhealthy when a Pod's
 // gameserver container has crashed, or let it restart as per usual K8s operations.
 // It does this by checking a combination of the current GameServer state and annotation data that stores
@@ -257,6 +258,12 @@ func (hc *HealthController) syncGameServer(ctx context.Context, key string) erro
 func (hc *HealthController) skipUnhealthyGameContainer(gs *agonesv1.GameServer, pod *corev1.Pod) (bool, error) {
 	if !metav1.IsControlledBy(pod, gs) {
 		// This is not the Pod we are looking for 🤖
+		return false, nil
+	}
+
+	// if Sidecar is enabled, always return false, since there is no skip - it's just whatever K8s/Agones wants tso do.
+	// on move to stable, this function can be deleted.
+	if runtime.FeatureEnabled(runtime.FeatureSidecarContainers) {
 		return false, nil
 	}
 
