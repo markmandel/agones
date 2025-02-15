@@ -320,6 +320,7 @@ func TestGameServerUnhealthyAfterDeletingPod(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TOXO: Ignore this when feature enabled
 func TestGameServerRestartBeforeReadyCrash(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -431,6 +432,7 @@ func TestGameServerRestartBeforeReadyCrash(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TOXO: This should pass. (work from here
 func TestGameServerUnhealthyAfterReadyCrash(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
