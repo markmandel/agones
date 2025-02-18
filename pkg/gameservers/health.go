@@ -133,7 +133,7 @@ func (hc *HealthController) unschedulableWithNoFreePorts(pod *corev1.Pod) bool {
 // failedPod checks if the Pod's phase is "Failed"
 func (hc *HealthController) failedPod(pod *corev1.Pod) bool {
 	// return false, since a failed pod only happens when sidecars are enabled.
-	if runtime.FeatureEnabled(runtime.FeatureSidecarContainers) {
+	if !runtime.FeatureEnabled(runtime.FeatureSidecarContainers) {
 		return false
 	}
 

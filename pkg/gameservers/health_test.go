@@ -22,6 +22,7 @@ import (
 
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	agtesting "agones.dev/agones/pkg/testing"
+	agruntime "agones.dev/agones/pkg/util/runtime"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,6 +59,30 @@ func TestHealthControllerFailedContainer(t *testing.T) {
 
 	pod2.Status.ContainerStatuses[0].Name = "Not a matching name"
 	assert.False(t, hc.failedContainer(pod2))
+}
+
+func TestHealthControllerFailedPod(t *testing.T) {
+	t.Parallel()
+
+	agruntime.FeatureTestMutex.Lock()
+	defer agruntime.FeatureTestMutex.Unlock()
+
+	// set sidecar feature flag
+	require.NoError(t, agruntime.ParseFeatures(string(agruntime.FeatureSidecarContainers)+"=true"))
+
+	m := agtesting.NewMocks()
+	hc := NewHealthController(healthcheck.NewHandler(), m.KubeClient, m.AgonesClient, m.KubeInformerFactory, m.AgonesInformerFactory, false)
+
+	gs := agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "test"}, Spec: newSingleContainerSpec()}
+	gs.ApplyDefaults()
+
+	pod, err := gs.Pod(agtesting.FakeAPIHooks{})
+	require.NoError(t, err)
+	assert.False(t, hc.failedPod(pod))
+
+	// set the pod to failed status
+	pod.Status.Phase = corev1.PodFailed
+	assert.True(t, hc.failedPod(pod))
 }
 
 func TestHealthUnschedulableWithNoFreePorts(t *testing.T) {
