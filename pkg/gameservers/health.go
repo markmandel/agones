@@ -107,7 +107,7 @@ func NewHealthController(
 // isUnhealthy returns if the Pod event is going
 // to cause the GameServer to become Unhealthy
 func (hc *HealthController) isUnhealthy(pod *corev1.Pod) bool {
-	return hc.evictedPod(pod) || hc.unschedulableWithNoFreePorts(pod) || hc.failedContainer(pod)
+	return hc.evictedPod(pod) || hc.unschedulableWithNoFreePorts(pod) || hc.failedContainer(pod) || hc.failedPod(pod)
 }
 
 // unschedulableWithNoFreePorts checks if the reason the Pod couldn't be scheduled
@@ -126,6 +126,18 @@ func (hc *HealthController) unschedulableWithNoFreePorts(pod *corev1.Pod) bool {
 		}
 	}
 	return false
+}
+
+// TOXO: test that this makes a GameServer Unhealthy.
+
+// failedPod checks if the Pod's phase is "Failed"
+func (hc *HealthController) failedPod(pod *corev1.Pod) bool {
+	// return false, since a failed pod only happens when sidecars are enabled.
+	if runtime.FeatureEnabled(runtime.FeatureSidecarContainers) {
+		return false
+	}
+
+	return pod.Status.Phase == corev1.PodFailed
 }
 
 // evictedPod checks if the Pod was Evicted
