@@ -34,8 +34,14 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// TOXO: fix these tests.
+
 func TestHealthControllerFailedContainer(t *testing.T) {
 	t.Parallel()
+
+	agruntime.FeatureTestMutex.Lock()
+	defer agruntime.FeatureTestMutex.Unlock()
+	require.NoError(t, agruntime.ParseFeatures(string(agruntime.FeatureSidecarContainers)+"=false"))
 
 	m := agtesting.NewMocks()
 	hc := NewHealthController(healthcheck.NewHandler(), m.KubeClient, m.AgonesClient, m.KubeInformerFactory, m.AgonesInformerFactory, false)
@@ -127,6 +133,10 @@ func TestHealthUnschedulableWithNoFreePorts(t *testing.T) {
 
 func TestHealthControllerSkipUnhealthyGameContainer(t *testing.T) {
 	t.Parallel()
+
+	agruntime.FeatureTestMutex.Lock()
+	defer agruntime.FeatureTestMutex.Unlock()
+	require.NoError(t, agruntime.ParseFeatures(string(agruntime.FeatureSidecarContainers)+"=false"))
 
 	type expected struct {
 		result bool
