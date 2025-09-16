@@ -69,9 +69,10 @@ var (
 	_ beta.SDKServer  = &SDKServer{}
 )
 
-// changeLog tracks changes across SDK updates for event reporting when
+// changeLog aggregates final changes across SDK updates for event reporting when
 // batching updates
 type changeLog struct {
+	state       agonesv1.GameServerState
 	labels      map[string]string
 	annotations map[string]string
 }
@@ -279,27 +280,34 @@ func (s *SDKServer) WaitForConnection(ctx context.Context) error {
 
 // applyUpdatesToGameServer applies all the batches updates to a copy of gsCopy and a new changeLog instance.
 // if lock is true, will apply a Read lock. Otherwise, you should implement your own wrapping lock.
-func (s *SDKServer) applyUpdatesToGameServer(lock bool) (*agonesv1.GameServer, *changeLog) {
+// TOXO: do you want some tests for this?
+func (s *SDKServer) applyUpdatesToGameServer(lock bool) (*agonesv1.GameServer, *changeLog, error) {
 	if lock {
 		s.gsUpdateMutex.RLock()
 		defer s.gsUpdateMutex.RUnlock()
 	}
 
-	gsCopy := s.gsCopy.DeepCopy()
-	changes := &changeLog{}
-
-	for _, f := range s.gsUpdateBatch {
-		f(gsCopy, changes)
+	gsCopy, err := s.gameServer()
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return gsCopy, changes
+	changes := &changeLog{}
+	gs := gsCopy.DeepCopy()
+
+	for _, f := range s.gsUpdateBatch {
+		f(gs, changes)
+	}
+
+	return gs, changes, err
 }
 
 // syncGameServer synchronises the GameServer with the requested operations.
 // The format of the key is {operation}. To prevent old operation data from
 // overwriting the new one, the operation data is persisted in SDKServer.
 func (s *SDKServer) syncGameServer(ctx context.Context, key string) error {
-	switch Operation(key) {
+	// TOXO: run down each of these functions, and capture special items and events
+	/*switch Operation(key) {
 	case updateState:
 		return s.updateState(ctx)
 	case updateLabel:
@@ -314,7 +322,31 @@ func (s *SDKServer) syncGameServer(ctx context.Context, key string) error {
 		return s.updateCounter(ctx)
 	case updateLists:
 		return s.updateList(ctx)
+	}*/
+
+	s.gsUpdateMutex.Lock()
+	defer s.gsUpdateMutex.Unlock()
+	gs, changes, err := s.applyUpdatesToGameServer(false)
+	if err != nil {
+		return err
 	}
+
+	// If we are currently in shutdown/being deleted, there is no escaping.
+	if gs.IsBeingDeleted() {
+		s.logger.Debug("GameServerState being shutdown. Skipping update.")
+		return nil
+	}
+
+	s.logger.WithField("gs", gs).WithField("changes", changes).Debug("Updating gameserver")
+
+	gs, err = s.patchGameServer(ctx, gs, s.gsCopy)
+	if err != nil {
+		return errors.Wrapf(err, "could not update GameServer %s/%s to state %s", s.namespace, s.gameServerName, gs.Status.State)
+	}
+
+	// TOXO: handle events from changes
+
+	// TOXO: handle special state changes
 
 	return errors.Errorf("could not sync game server key: %s", key)
 }
@@ -407,6 +439,7 @@ func (s *SDKServer) updateState(ctx context.Context) error {
 }
 
 // Gets the GameServer from the cache, or from the local SDKServer if that version is more recent.
+// needs to be wrapped in gsUpdateMutex. Assumes it is.
 func (s *SDKServer) gameServer() (*agonesv1.GameServer, error) {
 	// this ensure that if we get requests for the gameserver before the cache has been synced,
 	// they will block here until it's ready
@@ -415,8 +448,6 @@ func (s *SDKServer) gameServer() (*agonesv1.GameServer, error) {
 	if err != nil {
 		return gs, errors.Wrapf(err, "could not retrieve GameServer %s/%s", s.namespace, s.gameServerName)
 	}
-	s.gsUpdateMutex.RLock()
-	defer s.gsUpdateMutex.RUnlock()
 	if s.gsCopy != nil && gs.ObjectMeta.Generation < s.gsCopy.Generation {
 		return s.gsCopy, nil
 	}
@@ -425,18 +456,18 @@ func (s *SDKServer) gameServer() (*agonesv1.GameServer, error) {
 
 // patchGameServer is a helper function to create and apply a patch update, so the changes in
 // gsCopy are applied to the original gs.
-func (s *SDKServer) patchGameServer(ctx context.Context, gs, gsCopy *agonesv1.GameServer) (*agonesv1.GameServer, error) {
-	patch, err := gs.Patch(gsCopy)
+func (s *SDKServer) patchGameServer(ctx context.Context, old, new *agonesv1.GameServer) (*agonesv1.GameServer, error) {
+	patch, err := old.Patch(new)
 	if err != nil {
 		return nil, err
 	}
 
-	gs, err = s.gameServerGetter.GameServers(s.namespace).Patch(ctx, gs.GetObjectMeta().GetName(), types.JSONPatchType, patch, metav1.PatchOptions{})
+	old, err = s.gameServerGetter.GameServers(s.namespace).Patch(ctx, old.GetObjectMeta().GetName(), types.JSONPatchType, patch, metav1.PatchOptions{})
 	// if the test operation fails, no reason to error log
 	if err != nil && k8serrors.IsInvalid(err) {
 		err = workerqueue.NewTraceError(err)
 	}
-	return gs, errors.Wrapf(err, "error attempting to patch gameserver: %s/%s", gsCopy.ObjectMeta.Namespace, gsCopy.ObjectMeta.Name)
+	return old, errors.Wrapf(err, "error attempting to patch gameserver: %s/%s", new.ObjectMeta.Namespace, new.ObjectMeta.Name)
 }
 
 // updateLabels updates the labels on this GameServer to the ones persisted in SDKServer,
