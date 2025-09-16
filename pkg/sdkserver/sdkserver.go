@@ -57,18 +57,10 @@ import (
 	"agones.dev/agones/pkg/util/workerqueue"
 )
 
-// Operation is a synchronisation action
-type Operation string
-
 const (
-	updateState            Operation     = "updateState"
-	updateLabel            Operation     = "updateLabel"
-	updateAnnotation       Operation     = "updateAnnotation"
-	updatePlayerCapacity   Operation     = "updatePlayerCapacity"
-	updateConnectedPlayers Operation     = "updateConnectedPlayers"
-	updateCounters         Operation     = "updateCounters"
-	updateLists            Operation     = "updateLists"
-	updatePeriod           time.Duration = time.Second
+	// key for any knd of worker queue update
+	updateKey    = "update"
+	updatePeriod = time.Second
 )
 
 var (
@@ -77,24 +69,11 @@ var (
 	_ beta.SDKServer  = &SDKServer{}
 )
 
-type counterUpdateRequest struct {
-	// Capacity of the Counter as set by capacitySet.
-	capacitySet *int64
-	// Count of the Counter as set by countSet.
-	countSet *int64
-	// Tracks the sum of CountIncrement, CountDecrement, and/or CountSet requests from the client SDK.
-	diff int64
-	// Counter as retreived from the GameServer
-	counter agonesv1.CounterStatus
-}
-
-type listUpdateRequest struct {
-	// Capacity of the List as set by capacitySet.
-	capacitySet *int64
-	// String keys are the Values to remove from the List
-	valuesToDelete map[string]bool
-	// Values to add to the List
-	valuesToAppend []string
+// changeLog tracks changes across SDK updates for event reporting when
+// batching updates
+type changeLog struct {
+	labels      map[string]string
+	annotations map[string]string
 }
 
 // SDKServer is a gRPC server, that is meant to be a sidecar
@@ -123,18 +102,12 @@ type SDKServer struct {
 	connectedStreams    []sdk.SDK_WatchGameServerServer
 	ctx                 context.Context
 	recorder            record.EventRecorder
-	gsLabels            map[string]string
-	gsAnnotations       map[string]string
-	gsState             agonesv1.GameServerState
 	gsStateChannel      chan agonesv1.GameServerState
 	gsUpdateMutex       sync.RWMutex
+	gsUpdateBatch       []func(server *agonesv1.GameServer, changes *changeLog)
 	gsWaitForSync       sync.WaitGroup
 	reserveTimer        *time.Timer
 	gsReserveDuration   *time.Duration
-	gsPlayerCapacity    int64
-	gsConnectedPlayers  []string
-	gsCounterUpdates    map[string]counterUpdateRequest
-	gsListUpdates       map[string]listUpdateRequest
 	gsCopy              *agonesv1.GameServer
 }
 
@@ -167,18 +140,10 @@ func NewSDKServer(gameServerName, namespace string, kubeClient kubernetes.Interf
 		healthMutex:        sync.RWMutex{},
 		healthFailureCount: 0,
 		streamMutex:        sync.RWMutex{},
-		gsLabels:           map[string]string{},
-		gsAnnotations:      map[string]string{},
 		gsUpdateMutex:      sync.RWMutex{},
+		gsUpdateBatch:      []func(*agonesv1.GameServer, *changeLog){},
 		gsWaitForSync:      sync.WaitGroup{},
-		gsConnectedPlayers: []string{},
 		gsStateChannel:     make(chan agonesv1.GameServerState, 2),
-	}
-
-	if runtime.FeatureEnabled(runtime.FeatureCountsAndLists) {
-		// Once FeatureCountsAndLists is in GA, move this into SDKServer creation above.
-		s.gsCounterUpdates = map[string]counterUpdateRequest{}
-		s.gsListUpdates = map[string]listUpdateRequest{}
 	}
 
 	s.informerFactory = factory
@@ -260,16 +225,6 @@ func (s *SDKServer) Run(ctx context.Context) error {
 		s.gsUpdateMutex.Unlock()
 	}
 
-	// populate player tracking values
-	if runtime.FeatureEnabled(runtime.FeaturePlayerTracking) {
-		s.gsUpdateMutex.Lock()
-		if gs.Status.Players != nil {
-			s.gsPlayerCapacity = gs.Status.Players.Capacity
-			s.gsConnectedPlayers = gs.Status.Players.IDs
-		}
-		s.gsUpdateMutex.Unlock()
-	}
-
 	// then start the http endpoints
 	s.logger.Debug("Starting SDKServer http health check...")
 	go func() {
@@ -320,6 +275,24 @@ func (s *SDKServer) WaitForConnection(ctx context.Context) error {
 		s.connected = true
 		return true, nil
 	})
+}
+
+// applyUpdatesToGameServer applies all the batches updates to a copy of gsCopy and a new changeLog instance.
+// if lock is true, will apply a Read lock. Otherwise, you should implement your own wrapping lock.
+func (s *SDKServer) applyUpdatesToGameServer(lock bool) (*agonesv1.GameServer, *changeLog) {
+	if lock {
+		s.gsUpdateMutex.RLock()
+		defer s.gsUpdateMutex.RUnlock()
+	}
+
+	gsCopy := s.gsCopy.DeepCopy()
+	changes := &changeLog{}
+
+	for _, f := range s.gsUpdateBatch {
+		f(gsCopy, changes)
+	}
+
+	return gsCopy, changes
 }
 
 // syncGameServer synchronises the GameServer with the requested operations.
