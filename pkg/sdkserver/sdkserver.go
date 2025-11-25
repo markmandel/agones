@@ -71,6 +71,7 @@ var (
 
 // changeLog aggregates final changes across SDK updates for event reporting when
 // batching updates
+// TOXO: add a "changed" boolean.
 type changeLog struct {
 	state       agonesv1.GameServerState
 	labels      map[string]string
@@ -248,11 +249,11 @@ func (s *SDKServer) Run(ctx context.Context) error {
 // This is a workaround for the informer hanging indefinitely on first LIST due
 // to a flaky network to the Kubernetes service endpoint.
 func (s *SDKServer) WaitForConnection(ctx context.Context) error {
-	// In normal operaiton, waitForConnection is called exactly once in Run().
+	// In normal operation, waitForConnection is called exactly once in Run().
 	// In unit tests, waitForConnection() can be called before Run() to ensure
 	// that connected is true when Run() is called, otherwise the List() below
 	// may race with a test that changes a mock. (Despite the fact that we drop
-	// the data on the ground, the Go race detector will pereceive a data race.)
+	// the data on the ground, the Go race detector will perceive a data race.)
 	if s.connected {
 		return nil
 	}
@@ -343,12 +344,94 @@ func (s *SDKServer) syncGameServer(ctx context.Context, key string) error {
 	if err != nil {
 		return errors.Wrapf(err, "could not update GameServer %s/%s to state %s", s.namespace, s.gameServerName, gs.Status.State)
 	}
+	// keep the latest version
+	s.gsCopy = gs
 
 	// TOXO: handle events from changes
 
 	// TOXO: handle special state changes
 
 	return errors.Errorf("could not sync game server key: %s", key)
+}
+
+// Gets the GameServer from the cache, or from the local SDKServer if that version is more recent.
+// needs to be wrapped in gsUpdateMutex. Assumes it is.
+func (s *SDKServer) gameServer() (*agonesv1.GameServer, error) {
+	// this ensures that if we get requests for the gameserver before the cache has been synced,
+	// they will block here until it's ready
+	s.gsWaitForSync.Wait()
+	gs, err := s.gameServerLister.GameServers(s.namespace).Get(s.gameServerName)
+	if err != nil {
+		return gs, errors.Wrapf(err, "could not retrieve GameServer %s/%s", s.namespace, s.gameServerName)
+	}
+	if s.gsCopy != nil && gs.ObjectMeta.Generation < s.gsCopy.Generation {
+		return s.gsCopy, nil
+	}
+	return gs, nil
+}
+
+// patchGameServer is a helper function to create and apply a patch update, so the changes in
+// gsCopy are applied to the original gs.
+func (s *SDKServer) patchGameServer(ctx context.Context, old, new *agonesv1.GameServer) (*agonesv1.GameServer, error) {
+	patch, err := old.Patch(new)
+	if err != nil {
+		return nil, err
+	}
+
+	old, err = s.gameServerGetter.GameServers(s.namespace).Patch(ctx, old.GetObjectMeta().GetName(), types.JSONPatchType, patch, metav1.PatchOptions{})
+	// if the test operation fails, no reason to error log
+	if err != nil && k8serrors.IsInvalid(err) {
+		err = workerqueue.NewTraceError(err)
+	}
+	return old, errors.Wrapf(err, "error attempting to patch gameserver: %s/%s", new.ObjectMeta.Namespace, new.ObjectMeta.Name)
+}
+
+// updateLabels updates the labels on this GameServer to the ones persisted in SDKServer,
+// i.e. SDKServer.gsLabels, with the prefix of "agones.dev/sdk-"
+func (s *SDKServer) updateLabels(ctx context.Context) error {
+	s.logger.WithField("labels", s.gsLabels).Debug("Updating label")
+	gs, err := s.gameServer()
+	if err != nil {
+		return err
+	}
+
+	gsCopy := gs.DeepCopy()
+
+	s.gsUpdateMutex.RLock()
+	if len(s.gsLabels) > 0 && gsCopy.ObjectMeta.Labels == nil {
+		gsCopy.ObjectMeta.Labels = map[string]string{}
+	}
+	for k, v := range s.gsLabels {
+		gsCopy.ObjectMeta.Labels[metadataPrefix+k] = v
+	}
+	s.gsUpdateMutex.RUnlock()
+
+	_, err = s.patchGameServer(ctx, gs, gsCopy)
+	return err
+}
+
+// updateAnnotations updates the Annotations on this GameServer to the ones persisted in SDKServer,
+// i.e. SDKServer.gsAnnotations, with the prefix of "agones.dev/sdk-"
+func (s *SDKServer) updateAnnotations(ctx context.Context) error {
+	s.logger.WithField("annotations", s.gsAnnotations).Debug("Updating annotation")
+	gs, err := s.gameServer()
+	if err != nil {
+		return err
+	}
+
+	gsCopy := gs.DeepCopy()
+
+	s.gsUpdateMutex.RLock()
+	if len(s.gsAnnotations) > 0 && gsCopy.ObjectMeta.Annotations == nil {
+		gsCopy.ObjectMeta.Annotations = map[string]string{}
+	}
+	for k, v := range s.gsAnnotations {
+		gsCopy.ObjectMeta.Annotations[metadataPrefix+k] = v
+	}
+	s.gsUpdateMutex.RUnlock()
+
+	_, err = s.patchGameServer(ctx, gs, gsCopy)
+	return err
 }
 
 // updateState sets the GameServer Status's state to the one persisted in SDKServer,
@@ -438,86 +521,6 @@ func (s *SDKServer) updateState(ctx context.Context) error {
 	return nil
 }
 
-// Gets the GameServer from the cache, or from the local SDKServer if that version is more recent.
-// needs to be wrapped in gsUpdateMutex. Assumes it is.
-func (s *SDKServer) gameServer() (*agonesv1.GameServer, error) {
-	// this ensure that if we get requests for the gameserver before the cache has been synced,
-	// they will block here until it's ready
-	s.gsWaitForSync.Wait()
-	gs, err := s.gameServerLister.GameServers(s.namespace).Get(s.gameServerName)
-	if err != nil {
-		return gs, errors.Wrapf(err, "could not retrieve GameServer %s/%s", s.namespace, s.gameServerName)
-	}
-	if s.gsCopy != nil && gs.ObjectMeta.Generation < s.gsCopy.Generation {
-		return s.gsCopy, nil
-	}
-	return gs, nil
-}
-
-// patchGameServer is a helper function to create and apply a patch update, so the changes in
-// gsCopy are applied to the original gs.
-func (s *SDKServer) patchGameServer(ctx context.Context, old, new *agonesv1.GameServer) (*agonesv1.GameServer, error) {
-	patch, err := old.Patch(new)
-	if err != nil {
-		return nil, err
-	}
-
-	old, err = s.gameServerGetter.GameServers(s.namespace).Patch(ctx, old.GetObjectMeta().GetName(), types.JSONPatchType, patch, metav1.PatchOptions{})
-	// if the test operation fails, no reason to error log
-	if err != nil && k8serrors.IsInvalid(err) {
-		err = workerqueue.NewTraceError(err)
-	}
-	return old, errors.Wrapf(err, "error attempting to patch gameserver: %s/%s", new.ObjectMeta.Namespace, new.ObjectMeta.Name)
-}
-
-// updateLabels updates the labels on this GameServer to the ones persisted in SDKServer,
-// i.e. SDKServer.gsLabels, with the prefix of "agones.dev/sdk-"
-func (s *SDKServer) updateLabels(ctx context.Context) error {
-	s.logger.WithField("labels", s.gsLabels).Debug("Updating label")
-	gs, err := s.gameServer()
-	if err != nil {
-		return err
-	}
-
-	gsCopy := gs.DeepCopy()
-
-	s.gsUpdateMutex.RLock()
-	if len(s.gsLabels) > 0 && gsCopy.ObjectMeta.Labels == nil {
-		gsCopy.ObjectMeta.Labels = map[string]string{}
-	}
-	for k, v := range s.gsLabels {
-		gsCopy.ObjectMeta.Labels[metadataPrefix+k] = v
-	}
-	s.gsUpdateMutex.RUnlock()
-
-	_, err = s.patchGameServer(ctx, gs, gsCopy)
-	return err
-}
-
-// updateAnnotations updates the Annotations on this GameServer to the ones persisted in SDKServer,
-// i.e. SDKServer.gsAnnotations, with the prefix of "agones.dev/sdk-"
-func (s *SDKServer) updateAnnotations(ctx context.Context) error {
-	s.logger.WithField("annotations", s.gsAnnotations).Debug("Updating annotation")
-	gs, err := s.gameServer()
-	if err != nil {
-		return err
-	}
-
-	gsCopy := gs.DeepCopy()
-
-	s.gsUpdateMutex.RLock()
-	if len(s.gsAnnotations) > 0 && gsCopy.ObjectMeta.Annotations == nil {
-		gsCopy.ObjectMeta.Annotations = map[string]string{}
-	}
-	for k, v := range s.gsAnnotations {
-		gsCopy.ObjectMeta.Annotations[metadataPrefix+k] = v
-	}
-	s.gsUpdateMutex.RUnlock()
-
-	_, err = s.patchGameServer(ctx, gs, gsCopy)
-	return err
-}
-
 // enqueueState enqueue a State change request into the
 // workerqueue
 func (s *SDKServer) enqueueState(state agonesv1.GameServerState) {
@@ -533,6 +536,14 @@ func (s *SDKServer) enqueueState(state agonesv1.GameServerState) {
 // Ready enters the RequestReady state change for this GameServer into
 // the workqueue so it can be updated
 func (s *SDKServer) Ready(_ context.Context, e *sdk.Empty) (*sdk.Empty, error) {
+	s.gsUpdateMutex.Lock()
+	defer s.gsUpdateMutex.Unlock()
+
+	gs, _, err := s.applyUpdatesToGameServer(false)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not update gameserver to ready state")
+	}
+
 	s.logger.Debug("Received Ready request, adding to queue")
 	s.stopReserveTimer()
 	s.enqueueState(agonesv1.GameServerStateRequestReady)
