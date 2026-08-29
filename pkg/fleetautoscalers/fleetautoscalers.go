@@ -208,7 +208,7 @@ func applyWasmPolicy(ctx context.Context, state *fasState, wp *apis.WasmPolicy, 
 }
 
 // buildURLFromConfiguration - build URL for Webhook and set CARoot for client Transport
-// TOXO: refactor this to take in the http client, and then move it to pkg/apis/extension.go
+// TOXO: refactor this to take in the http client, and then move it to pkg/apis/plugin.go
 func buildURLFromConfiguration(state *fasState, w *apis.URLConfiguration) (u *url.URL, err error) {
 	if w.URL != nil && w.Service != nil {
 		return nil, errs.New("service and URL cannot be used simultaneously")

@@ -12,9 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-{{/* schema defining a wasm function to run as an extension plugin to Agones */}}
+{{/* schema for a URL configuration for webhooks and wasm */}}
+{{- define "url.configuration" }}
+type: object
+nullable: true
+properties:
+  url:
+    type: string
+  service:
+    type: object
+    required:
+      - namespace
+      - name
+    properties:
+      namespace:
+        type: string
+      name:
+        type: string
+      path:
+        type: string
+      port:
+        type: integer
+  caBundle:
+    type: string
+    format: byte
+{{- end }}
 
-{{- define "wasm.extension" }}
+{{/* schema defining a wasm function to run as an extension plugin to Agones */}}
+{{- define "plugin.wasm" }}
 wasm:
   type: object
   nullable: true
