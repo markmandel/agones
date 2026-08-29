@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"agones.dev/agones/pkg/apis"
 	"agones.dev/agones/pkg/util/runtime"
 	"github.com/stretchr/testify/assert"
 	admregv1 "k8s.io/api/admissionregistration/v1"
@@ -759,7 +760,7 @@ func customFixture(t FleetAutoscalerPolicyType) *FleetAutoscaler {
 		res.Spec.Policy.Type = WebhookPolicyType
 		res.Spec.Policy.Buffer = nil
 		url := "/scale"
-		res.Spec.Policy.Webhook = &URLConfiguration{
+		res.Spec.Policy.Webhook = &apis.URLConfiguration{
 			Service: &admregv1.ServiceReference{
 				Name:      "service1",
 				Namespace: "default",
@@ -845,13 +846,13 @@ func customFixture(t FleetAutoscalerPolicyType) *FleetAutoscaler {
 		res.Spec.Policy.Type = WasmPolicyType
 		res.Spec.Policy.Buffer = nil
 		url := "http://example.com/wasm-module"
-		res.Spec.Policy.Wasm = &WasmPolicy{
+		res.Spec.Policy.Wasm = &apis.WasmPolicy{
 			Function: "scale",
 			Config: map[string]string{
 				"scale_buffer": "10",
 			},
-			From: WasmFrom{
-				URL: &URLConfiguration{
+			From: apis.WasmFrom{
+				URL: &apis.URLConfiguration{
 					URL: &url,
 				},
 			},

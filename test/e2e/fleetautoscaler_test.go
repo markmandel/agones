@@ -35,6 +35,7 @@ import (
 	"testing"
 	"time"
 
+	"agones.dev/agones/pkg/apis"
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	allocationv1 "agones.dev/agones/pkg/apis/allocation/v1"
 	autoscalingv1 "agones.dev/agones/pkg/apis/autoscaling/v1"
@@ -418,7 +419,7 @@ func TestAutoscalerWebhook(t *testing.T) {
 	fas.Spec.Policy.Type = autoscalingv1.WebhookPolicyType
 	fas.Spec.Policy.Buffer = nil
 	path := "scale"
-	fas.Spec.Policy.Webhook = &autoscalingv1.URLConfiguration{
+	fas.Spec.Policy.Webhook = &apis.URLConfiguration{
 		Service: &admregv1.ServiceReference{
 			Name:      svc.ObjectMeta.Name,
 			Namespace: framework.Namespace,
@@ -584,7 +585,7 @@ func TestFleetAutoscalerTLSWebhook(t *testing.T) {
 	fas.Spec.Policy.Buffer = nil
 	path := "scale"
 
-	fas.Spec.Policy.Webhook = &autoscalingv1.URLConfiguration{
+	fas.Spec.Policy.Webhook = &apis.URLConfiguration{
 		Service: &admregv1.ServiceReference{
 			Name:      svc.ObjectMeta.Name,
 			Namespace: defaultNS,
@@ -656,7 +657,7 @@ func TestAutoscalerWebhookWithMetadata(t *testing.T) {
 	fas.Spec.Policy.Type = autoscalingv1.WebhookPolicyType
 	fas.Spec.Policy.Buffer = nil
 	path := "scale"
-	fas.Spec.Policy.Webhook = &autoscalingv1.URLConfiguration{
+	fas.Spec.Policy.Webhook = &apis.URLConfiguration{
 		Service: &admregv1.ServiceReference{
 			Name:      svc.ObjectMeta.Name,
 			Namespace: framework.Namespace,
@@ -2146,11 +2147,11 @@ func TestWasmAutoScaler(t *testing.T) {
 					FleetName: flt.ObjectMeta.Name,
 					Policy: autoscalingv1.FleetAutoscalerPolicy{
 						Type: autoscalingv1.WasmPolicyType,
-						Wasm: &autoscalingv1.WasmPolicy{
+						Wasm: &apis.WasmPolicy{
 							Function: "scale",
 							Config:   make(map[string]string),
-							From: autoscalingv1.WasmFrom{
-								URL: &autoscalingv1.URLConfiguration{
+							From: apis.WasmFrom{
+								URL: &apis.URLConfiguration{
 									Service: &admregv1.ServiceReference{
 										Namespace: framework.Namespace,
 										Name:      service.ObjectMeta.Name,

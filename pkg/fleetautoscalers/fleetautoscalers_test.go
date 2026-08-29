@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"agones.dev/agones/pkg/apis"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -404,7 +405,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 
 	var testCases = []struct {
 		description             string
-		webhookPolicy           *autoscalingv1.URLConfiguration
+		webhookPolicy           *apis.URLConfiguration
 		specReplicas            int32
 		statusReplicas          int32
 		statusAllocatedReplicas int32
@@ -413,7 +414,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 	}{
 		{
 			description: "Allocated replicas per cent < 70%, no scaling",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: nil,
 				URL:     &(server.URL),
 			},
@@ -445,7 +446,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "Allocated replicas per cent == 70%, no scaling",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: nil,
 				URL:     &(server.URL),
 			},
@@ -461,7 +462,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "Allocated replicas per cent 80% > 70%, scale up",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: nil,
 				URL:     &(server.URL),
 			},
@@ -486,7 +487,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "URL and Service are not nil",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: &admregv1.ServiceReference{
 					Name:      "service1",
 					Namespace: "default",
@@ -502,7 +503,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "URL not nil but empty",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: nil,
 				URL:     &emptyString,
 			},
@@ -514,7 +515,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "Invalid URL",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: nil,
 				URL:     &invalidURL,
 			},
@@ -526,7 +527,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "Service name is empty",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: &admregv1.ServiceReference{
 					Name:      "",
 					Namespace: "default",
@@ -541,7 +542,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "No certs",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: &admregv1.ServiceReference{
 					Name:      "service1",
 					Namespace: "default",
@@ -557,7 +558,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "Wrong server URL",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: nil,
 				URL:     &wrongServerURL,
 			},
@@ -569,7 +570,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "Handle server error",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: nil,
 				URL:     &(server.URL),
 			},
@@ -586,7 +587,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "Handle invalid response from the server",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: nil,
 				URL:     &(server.URL),
 			},
@@ -602,7 +603,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "Service and URL are nil",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: nil,
 				URL:     nil,
 			},
@@ -616,7 +617,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 			// Replicates issue #4555: webhook returns valid JSON that omits the 'response' field,
 			// leaving faResp.Response nil. Without the nil check this causes a panic.
 			description: "Webhook response omits 'response' field, nil Response should error not panic",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: nil,
 				URL:     &(server.URL),
 			},
@@ -677,7 +678,7 @@ func TestApplyWebhookPolicyWithMetadata(t *testing.T) {
 		"fixedReplicas": strconv.Itoa(int(fixedReplicas)),
 	}
 
-	webhookPolicy := &autoscalingv1.URLConfiguration{
+	webhookPolicy := &apis.URLConfiguration{
 		Service: nil,
 		URL:     &(server.URL),
 	}
@@ -700,7 +701,7 @@ func TestApplyWebhookPolicyNilFleet(t *testing.T) {
 	t.Parallel()
 
 	url := webhookURL
-	w := &autoscalingv1.URLConfiguration{
+	w := &apis.URLConfiguration{
 		Service: &admregv1.ServiceReference{
 			Name:      "service1",
 			Namespace: "default",
@@ -804,14 +805,14 @@ func TestBuildURLFromConfiguration(t *testing.T) {
 	testCases := []struct {
 		description string
 		state       *fasState
-		config      *autoscalingv1.URLConfiguration
+		config      *apis.URLConfiguration
 		expected    expected
 	}{
 		// Error cases
 		{
 			description: "Error: Both URL and Service provided",
 			state:       &fasState{},
-			config: &autoscalingv1.URLConfiguration{
+			config: &apis.URLConfiguration{
 				URL: &validURL,
 				Service: &admregv1.ServiceReference{
 					Name:      "service1",
@@ -825,7 +826,7 @@ func TestBuildURLFromConfiguration(t *testing.T) {
 		{
 			description: "Error: Empty URL string",
 			state:       &fasState{},
-			config: &autoscalingv1.URLConfiguration{
+			config: &apis.URLConfiguration{
 				URL: &emptyURL,
 			},
 			expected: expected{
@@ -835,7 +836,7 @@ func TestBuildURLFromConfiguration(t *testing.T) {
 		{
 			description: "Error: Neither URL nor Service provided",
 			state:       &fasState{},
-			config: &autoscalingv1.URLConfiguration{
+			config: &apis.URLConfiguration{
 				URL:     nil,
 				Service: nil,
 			},
@@ -846,7 +847,7 @@ func TestBuildURLFromConfiguration(t *testing.T) {
 		{
 			description: "Error: Service name empty",
 			state:       &fasState{},
-			config: &autoscalingv1.URLConfiguration{
+			config: &apis.URLConfiguration{
 				Service: &admregv1.ServiceReference{
 					Name:      "",
 					Namespace: "default",
@@ -859,7 +860,7 @@ func TestBuildURLFromConfiguration(t *testing.T) {
 		{
 			description: "Error: Invalid URL format",
 			state:       &fasState{},
-			config: &autoscalingv1.URLConfiguration{
+			config: &apis.URLConfiguration{
 				URL: &invalidURL,
 			},
 			expected: expected{
@@ -870,7 +871,7 @@ func TestBuildURLFromConfiguration(t *testing.T) {
 		{
 			description: "Valid URL without CABundle",
 			state:       &fasState{},
-			config: &autoscalingv1.URLConfiguration{
+			config: &apis.URLConfiguration{
 				URL: &validURL,
 			},
 			expected: expected{
@@ -881,7 +882,7 @@ func TestBuildURLFromConfiguration(t *testing.T) {
 		{
 			description: "Error: Invalid CABundle",
 			state:       &fasState{},
-			config: &autoscalingv1.URLConfiguration{
+			config: &apis.URLConfiguration{
 				URL:      &validURL,
 				CABundle: invalidCABundle,
 			},
@@ -893,7 +894,7 @@ func TestBuildURLFromConfiguration(t *testing.T) {
 		{
 			description: "Service: No namespace provided, default should be used",
 			state:       &fasState{},
-			config: &autoscalingv1.URLConfiguration{
+			config: &apis.URLConfiguration{
 				Service: &admregv1.ServiceReference{
 					Name:      "service1",
 					Namespace: "",
@@ -908,7 +909,7 @@ func TestBuildURLFromConfiguration(t *testing.T) {
 		{
 			description: "Service: No path provided, empty string should be used",
 			state:       &fasState{},
-			config: &autoscalingv1.URLConfiguration{
+			config: &apis.URLConfiguration{
 				Service: &admregv1.ServiceReference{
 					Name:      "service1",
 					Namespace: "test",
@@ -923,7 +924,7 @@ func TestBuildURLFromConfiguration(t *testing.T) {
 		{
 			description: "Service: Custom port specified",
 			state:       &fasState{},
-			config: &autoscalingv1.URLConfiguration{
+			config: &apis.URLConfiguration{
 				Service: &admregv1.ServiceReference{
 					Name:      "service1",
 					Namespace: "custom",
@@ -941,7 +942,7 @@ func TestBuildURLFromConfiguration(t *testing.T) {
 			state: &fasState{
 				httpClient: &http.Client{},
 			},
-			config: &autoscalingv1.URLConfiguration{
+			config: &apis.URLConfiguration{
 				Service: &admregv1.ServiceReference{
 					Name:      "service1",
 					Namespace: "default",
@@ -2827,7 +2828,7 @@ func TestApplyChainPolicy(t *testing.T) {
 		ID: "webhook policy",
 		FleetAutoscalerPolicy: autoscalingv1.FleetAutoscalerPolicy{
 			Type: autoscalingv1.WebhookPolicyType,
-			Webhook: &autoscalingv1.URLConfiguration{
+			Webhook: &apis.URLConfiguration{
 				Service: &admregv1.ServiceReference{
 					Name:      "service1",
 					Namespace: "default",
