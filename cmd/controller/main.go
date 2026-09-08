@@ -36,12 +36,12 @@ import (
 	"agones.dev/agones/pkg/gameserversets"
 	"agones.dev/agones/pkg/metrics"
 	"agones.dev/agones/pkg/portallocator"
+	"agones.dev/agones/pkg/util/errors"
 	"agones.dev/agones/pkg/util/httpserver"
 	"agones.dev/agones/pkg/util/runtime"
 	"agones.dev/agones/pkg/util/signals"
 	"github.com/google/uuid"
 	"github.com/heptiolabs/healthcheck"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -96,6 +96,7 @@ const (
 
 var (
 	logger = runtime.NewLoggerWithSource("main")
+	errs   = errors.FromPackage()
 )
 
 func setupLogging(logDir string, logSizeLimitMB int) {
@@ -529,13 +530,13 @@ func (c *config) validate() []error {
 func validateResource(request resource.Quantity, limit resource.Quantity, resourceName corev1.ResourceName) []error {
 	validationErrors := make([]error, 0)
 	if !limit.IsZero() && request.Cmp(limit) > 0 {
-		validationErrors = append(validationErrors, errors.Errorf("Request must be less than or equal to %s limit", resourceName))
+		validationErrors = append(validationErrors, errs.Errorf("Request must be less than or equal to %s limit", resourceName))
 	}
 	if request.Cmp(resource.Quantity{}) < 0 {
-		validationErrors = append(validationErrors, errors.Errorf("Resource %s request value must be non negative", resourceName))
+		validationErrors = append(validationErrors, errs.Errorf("Resource %s request value must be non negative", resourceName))
 	}
 	if limit.Cmp(resource.Quantity{}) < 0 {
-		validationErrors = append(validationErrors, errors.Errorf("Resource %s limit value must be non negative", resourceName))
+		validationErrors = append(validationErrors, errs.Errorf("Resource %s limit value must be non negative", resourceName))
 	}
 
 	return validationErrors
@@ -565,11 +566,11 @@ func validatePorts(portRanges map[string]portallocator.PortRange) []error {
 			if overlaps(values[j].MinPort, values[j].MaxPort, pr.MinPort, pr.MaxPort) {
 				switch {
 				case keys[j] == agonesv1.DefaultPortRange:
-					validationErrors = append(validationErrors, errors.Errorf("port range %s overlaps with min/max port", keys[i]))
+					validationErrors = append(validationErrors, errs.Errorf("port range %s overlaps with min/max port", keys[i]))
 				case keys[i] == agonesv1.DefaultPortRange:
-					validationErrors = append(validationErrors, errors.Errorf("port range %s overlaps with min/max port", keys[j]))
+					validationErrors = append(validationErrors, errs.Errorf("port range %s overlaps with min/max port", keys[j]))
 				default:
-					validationErrors = append(validationErrors, errors.Errorf("port range %s overlaps with min/max port of range %s", keys[i], keys[j]))
+					validationErrors = append(validationErrors, errs.Errorf("port range %s overlaps with min/max port of range %s", keys[i], keys[j]))
 				}
 			}
 		}
@@ -584,10 +585,10 @@ func validatePortRange(minPort, maxPort int32, rangeName string) []error {
 		rangeCtx = " for port range " + rangeName
 	}
 	if minPort <= 0 || maxPort <= 0 {
-		validationErrors = append(validationErrors, errors.New("min Port and Max Port values are required"+rangeCtx))
+		validationErrors = append(validationErrors, errs.New("min Port and Max Port values are required"+rangeCtx))
 	}
 	if maxPort < minPort {
-		validationErrors = append(validationErrors, errors.New("max Port cannot be set less that the Min Port"+rangeCtx))
+		validationErrors = append(validationErrors, errs.New("max Port cannot be set less that the Min Port"+rangeCtx))
 	}
 	return validationErrors
 }

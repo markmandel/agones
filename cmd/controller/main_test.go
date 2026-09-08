@@ -15,6 +15,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
@@ -116,7 +117,7 @@ func TestControllerConfigValidation_PortRangeOverlap(t *testing.T) {
 func errorsContainString(t *testing.T, errs []error, expected string) {
 	found := false
 	for _, v := range errs {
-		if expected == v.Error() {
+		if strings.Contains(v.Error(), expected) {
 			found = true
 			break
 		}
