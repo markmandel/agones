@@ -6953,16 +6953,16 @@ spec:
                                   x-kubernetes-int-or-string: true
                                   anyOf:
                                     - type: integer
-                                    - type: string    
+                                    - type: string
                             wasm:
                               type: object
                               nullable: true
                               required:
                                 - from
                               properties:
-                                function: # The exported function to call in the wasm module, defaults to 'scale'
+                                function: # The exported function to call in the wasm module
                                   type: string
-                                  default: scale
+                                  default: "scale"
                                 config: # Config values to pass to the wasm program on startup
                                   type: object
                                   additionalProperties:
@@ -7218,16 +7218,16 @@ spec:
                                         x-kubernetes-int-or-string: true
                                         anyOf:
                                           - type: integer
-                                          - type: string    
+                                          - type: string
                                   wasm:
                                     type: object
                                     nullable: true
                                     required:
                                       - from
                                     properties:
-                                      function: # The exported function to call in the wasm module, defaults to 'scale'
+                                      function: # The exported function to call in the wasm module
                                         type: string
-                                        default: scale
+                                        default: "scale"
                                       config: # Config values to pass to the wasm program on startup
                                         type: object
                                         additionalProperties:
@@ -7262,16 +7262,16 @@ spec:
                                                 format: byte
                                       hash: # optional sha256 hash to match against wasm file (it's optional, but recommended)
                                         type: string
-                                        pattern: "^[a-fA-F0-9]{64}$"    
+                                        pattern: "^[a-fA-F0-9]{64}$"
                           wasm:
                             type: object
                             nullable: true
                             required:
                               - from
                             properties:
-                              function: # The exported function to call in the wasm module, defaults to 'scale'
+                              function: # The exported function to call in the wasm module
                                 type: string
-                                default: scale
+                                default: "scale"
                               config: # Config values to pass to the wasm program on startup
                                 type: object
                                 additionalProperties:
@@ -7306,16 +7306,16 @@ spec:
                                         format: byte
                               hash: # optional sha256 hash to match against wasm file (it's optional, but recommended)
                                 type: string
-                                pattern: "^[a-fA-F0-9]{64}$" # Defines which policy to apply during the active period. Required.    
+                                pattern: "^[a-fA-F0-9]{64}$" # Defines which policy to apply during the active period. Required.
                     wasm:
                       type: object
                       nullable: true
                       required:
                         - from
                       properties:
-                        function: # The exported function to call in the wasm module, defaults to 'scale'
+                        function: # The exported function to call in the wasm module
                           type: string
-                          default: scale
+                          default: "scale"
                         config: # Config values to pass to the wasm program on startup
                           type: object
                           additionalProperties:

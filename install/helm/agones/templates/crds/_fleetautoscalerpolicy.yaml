@@ -139,5 +139,5 @@ policy:
             type: string
           {{- include "fleetautoscaler.policy" (dict "includeChainPolicy" false "includeSchedulePolicy" true "includePolicy" false) | indent 6 }} # Defines which policy to apply during the active period. Required.
     {{- end }}
-    {{- include "plugin.wasm" (dict "defaultFunction" "scale") | indent 4 }}
+    {{- include "plugin.wasm" (dict "defaultFunction" "scale") | nindent 4 }}
 {{- end }}

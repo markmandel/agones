@@ -60,15 +60,14 @@ func (w *URLConfiguration) ValidateURLConfiguration(fldPath *field.Path) field.E
 // WasmFrom defines the source of the Wasm module
 // +k8s:deepcopy-gen=true
 type WasmFrom struct {
-	// URL is the URL of the Wasm module to use for autoscaling.
+	// URL is the URL of the Wasm module.
 	URL *URLConfiguration `json:"url"`
 }
 
-// WasmPolicy controls the desired behavior of the Wasm policy.
-// It contains the configuration for the WebAssembly module used for autoscaling.
+// WasmPolicy contains the configuration for a WebAssembly module that runs as a plugin to Agones.
 // +k8s:deepcopy-gen=true
 type WasmPolicy struct {
-	// Function is the exported function to call in the wasm module, defaults to 'scale'
+	// Function is the exported function to call in the wasm module. The default depends on where the plugin is used.
 	// +optional
 	Function string `json:"function,omitempty"`
 	// Config values to pass to the wasm program on startup

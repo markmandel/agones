@@ -30,7 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"agones.dev/agones/pkg/apis"
 	extism "github.com/extism/go-sdk"
 	"github.com/robfig/cron/v3"
 
@@ -38,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/uuid"
 
+	"agones.dev/agones/pkg/apis"
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	autoscalingv1 "agones.dev/agones/pkg/apis/autoscaling/v1"
 	listeragonesv1 "agones.dev/agones/pkg/client/listers/agones/v1"

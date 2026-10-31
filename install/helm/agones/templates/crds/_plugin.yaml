@@ -39,16 +39,16 @@ properties:
 {{- end }}
 
 {{/* schema defining a wasm function to run as an extension plugin to Agones */}}
-{{- define "plugin.wasm" }}
+{{- define "plugin.wasm" -}}
 wasm:
   type: object
   nullable: true
   required:
     - from
   properties:
-    function: # The exported function to call in the wasm module, defaults to 'scale'
+    function: # The exported function to call in the wasm module
       type: string
-      default: {{ .defaultFunction }}
+      default: {{ .defaultFunction | quote }}
     config: # Config values to pass to the wasm program on startup
       type: object
       additionalProperties:
@@ -63,4 +63,4 @@ wasm:
     hash: # optional sha256 hash to match against wasm file (it's optional, but recommended)
       type: string
       pattern: "^[a-fA-F0-9]{64}$"
-{{- end}}
+{{- end }}
