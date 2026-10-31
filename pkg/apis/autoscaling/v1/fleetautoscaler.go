@@ -95,6 +95,8 @@ type FleetAutoscalerPolicy struct {
 	// Chain policy config params. Present only if FleetAutoscalerPolicyType = Chain.
 	// +optional
 	Chain ChainPolicy `json:"chain,omitempty"`
+	// [Stage:Alpha]
+	// [FeatureFlag:WasmAutoscaler]
 	// Wasm policy config params. Present only if FleetAutoscalerPolicyType = Wasm.
 	// +optional
 	Wasm *apis.WasmPolicy `json:"wasm,omitempty"`
