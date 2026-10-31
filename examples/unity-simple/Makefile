@@ -39,7 +39,7 @@ server_tag = $(REPOSITORY)/unity-simple-server:$(version)
 #                 |___/
 
 # build the Linux dedicated server with the Unity CLI
-a gpbuild-server:
+build-server:
 	unity build $(project_path) --target StandaloneLinux64 \
 		--execute-method AgonesExample.Editor.BatchBuild.BuildServer
 

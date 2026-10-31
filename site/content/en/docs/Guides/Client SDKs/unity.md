@@ -69,7 +69,7 @@ Download the source {{< ghlink href="sdks/unity" >}}directly from GitHub{{< /ghl
 
 ## Prerequisites
 
-- Unity >= 2019.1 (.NET 4.x)
+- Unity >= 2021.2 (.NET 4.x)
 
 ## Usage
 
