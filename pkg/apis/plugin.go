@@ -25,6 +25,7 @@ import (
 
 // URLConfiguration is a generic configuration for any integration with an external URL or
 // cluster provided service. For example, it can be used to configure a webhook or Wasm module
+// +k8s:deepcopy-gen=true
 type URLConfiguration admissionregistrationv1.WebhookClientConfig
 
 // ValidateURLConfiguration validates the URLConfiguration settings to make sure either a URL is set or
@@ -57,6 +58,7 @@ func (w *URLConfiguration) ValidateURLConfiguration(fldPath *field.Path) field.E
 }
 
 // WasmFrom defines the source of the Wasm module
+// +k8s:deepcopy-gen=true
 type WasmFrom struct {
 	// URL is the URL of the Wasm module to use for autoscaling.
 	URL *URLConfiguration `json:"url"`
@@ -64,6 +66,7 @@ type WasmFrom struct {
 
 // WasmPolicy controls the desired behavior of the Wasm policy.
 // It contains the configuration for the WebAssembly module used for autoscaling.
+// +k8s:deepcopy-gen=true
 type WasmPolicy struct {
 	// Function is the exported function to call in the wasm module, defaults to 'scale'
 	// +optional

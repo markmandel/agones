@@ -19,6 +19,7 @@
 package v1
 
 import (
+	apis "agones.dev/agones/pkg/apis"
 	autoscalingv1 "agones.dev/agones/pkg/apis/autoscaling/v1"
 )
 
@@ -32,7 +33,7 @@ type FleetAutoscalerPolicyApplyConfiguration struct {
 	// Buffer policy config params. Present only if FleetAutoscalerPolicyType = Buffer.
 	Buffer *BufferPolicyApplyConfiguration `json:"buffer,omitempty"`
 	// Webhook policy config params. Present only if FleetAutoscalerPolicyType = Webhook.
-	Webhook *URLConfigurationApplyConfiguration `json:"webhook,omitempty"`
+	Webhook *apis.URLConfiguration `json:"webhook,omitempty"`
 	// [Stage:Beta]
 	// [FeatureFlag:CountsAndLists]
 	// Counter policy config params. Present only if FleetAutoscalerPolicyType = Counter.
@@ -50,7 +51,7 @@ type FleetAutoscalerPolicyApplyConfiguration struct {
 	// Chain policy config params. Present only if FleetAutoscalerPolicyType = Chain.
 	Chain *autoscalingv1.ChainPolicy `json:"chain,omitempty"`
 	// Wasm policy config params. Present only if FleetAutoscalerPolicyType = Wasm.
-	Wasm *WasmPolicyApplyConfiguration `json:"wasm,omitempty"`
+	Wasm *apis.WasmPolicy `json:"wasm,omitempty"`
 }
 
 // FleetAutoscalerPolicyApplyConfiguration constructs a declarative configuration of the FleetAutoscalerPolicy type for use with
@@ -78,8 +79,8 @@ func (b *FleetAutoscalerPolicyApplyConfiguration) WithBuffer(value *BufferPolicy
 // WithWebhook sets the Webhook field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Webhook field is set to the value of the last call.
-func (b *FleetAutoscalerPolicyApplyConfiguration) WithWebhook(value *URLConfigurationApplyConfiguration) *FleetAutoscalerPolicyApplyConfiguration {
-	b.Webhook = value
+func (b *FleetAutoscalerPolicyApplyConfiguration) WithWebhook(value apis.URLConfiguration) *FleetAutoscalerPolicyApplyConfiguration {
+	b.Webhook = &value
 	return b
 }
 
@@ -118,7 +119,7 @@ func (b *FleetAutoscalerPolicyApplyConfiguration) WithChain(value autoscalingv1.
 // WithWasm sets the Wasm field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Wasm field is set to the value of the last call.
-func (b *FleetAutoscalerPolicyApplyConfiguration) WithWasm(value *WasmPolicyApplyConfiguration) *FleetAutoscalerPolicyApplyConfiguration {
-	b.Wasm = value
+func (b *FleetAutoscalerPolicyApplyConfiguration) WithWasm(value apis.WasmPolicy) *FleetAutoscalerPolicyApplyConfiguration {
+	b.Wasm = &value
 	return b
 }

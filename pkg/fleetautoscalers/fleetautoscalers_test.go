@@ -430,7 +430,7 @@ func TestApplyWebhookPolicy(t *testing.T) {
 		},
 		{
 			description: "Scale down in progress, no scaling",
-			webhookPolicy: &autoscalingv1.URLConfiguration{
+			webhookPolicy: &apis.URLConfiguration{
 				Service: nil,
 				URL:     &(server.URL),
 			},
