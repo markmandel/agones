@@ -22,7 +22,7 @@
 package v1
 
 import (
-	apis "agones.dev/agones/pkg/apis"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -293,7 +293,7 @@ func (in *FleetAutoscalerPolicy) DeepCopyInto(out *FleetAutoscalerPolicy) {
 	}
 	if in.Webhook != nil {
 		in, out := &in.Webhook, &out.Webhook
-		*out = new(apis.URLConfiguration)
+		*out = new(pluginsv1.URLConfiguration)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.Counter != nil {
@@ -320,7 +320,7 @@ func (in *FleetAutoscalerPolicy) DeepCopyInto(out *FleetAutoscalerPolicy) {
 	}
 	if in.Wasm != nil {
 		in, out := &in.Wasm, &out.Wasm
-		*out = new(apis.WasmPolicy)
+		*out = new(pluginsv1.WasmPolicy)
 		(*in).DeepCopyInto(*out)
 	}
 	return

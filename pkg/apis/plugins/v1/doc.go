@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package apis
+// +k8s:deepcopy-gen=package
 
-// TOXO: add tests for the extensions files.
+// Package v1 contains shared types for configuring plugins, such as Wasm modules and the URLs they are
+// loaded from. These types are used as fields within other Agones resources, and this group does not
+// define any resources itself.
+// +groupName=plugins.agones.dev
+package v1

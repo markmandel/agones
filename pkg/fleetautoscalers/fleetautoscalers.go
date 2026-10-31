@@ -37,9 +37,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/uuid"
 
-	"agones.dev/agones/pkg/apis"
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	autoscalingv1 "agones.dev/agones/pkg/apis/autoscaling/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 	listeragonesv1 "agones.dev/agones/pkg/client/listers/agones/v1"
 	"agones.dev/agones/pkg/fleets"
 	"agones.dev/agones/pkg/gameservers"
@@ -99,7 +99,7 @@ func computeDesiredFleetSize(ctx context.Context, state *fasState, pol autoscali
 	return replicas, limited, err
 }
 
-func applyWasmPolicy(ctx context.Context, state *fasState, wp *apis.WasmPolicy, f *agonesv1.Fleet, log *FasLogger) (int32, bool, error) {
+func applyWasmPolicy(ctx context.Context, state *fasState, wp *pluginsv1.WasmPolicy, f *agonesv1.Fleet, log *FasLogger) (int32, bool, error) {
 	if !runtime.FeatureEnabled(runtime.FeatureWasmAutoscaler) {
 		return 0, false, errs.Errorf("cannot apply WasmPolicy unless feature flag %s is enabled", runtime.FeatureWasmAutoscaler)
 	}
@@ -209,7 +209,7 @@ func applyWasmPolicy(ctx context.Context, state *fasState, wp *apis.WasmPolicy, 
 
 // buildURLFromConfiguration - build URL for Webhook and set CARoot for client Transport
 // TOXO: refactor this to take in the http client, and then move it to pkg/apis/plugin.go
-func buildURLFromConfiguration(state *fasState, w *apis.URLConfiguration) (u *url.URL, err error) {
+func buildURLFromConfiguration(state *fasState, w *pluginsv1.URLConfiguration) (u *url.URL, err error) {
 	if w.URL != nil && w.Service != nil {
 		return nil, errs.New("service and URL cannot be used simultaneously")
 	}
@@ -287,7 +287,7 @@ func setCABundle(tlsConfig *tls.Config, caBundle []byte) error {
 	return nil
 }
 
-func applyWebhookPolicy(ctx context.Context, state *fasState, w *apis.URLConfiguration, f *agonesv1.Fleet, fasLog *FasLogger) (replicas int32, limited bool, err error) {
+func applyWebhookPolicy(ctx context.Context, state *fasState, w *pluginsv1.URLConfiguration, f *agonesv1.Fleet, fasLog *FasLogger) (replicas int32, limited bool, err error) {
 	if w == nil {
 		return 0, false, errs.New("webhookPolicy parameter must not be nil")
 	}

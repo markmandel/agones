@@ -26,9 +26,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"agones.dev/agones/pkg/apis"
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	autoscalingv1 "agones.dev/agones/pkg/apis/autoscaling/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 	utilruntime "agones.dev/agones/pkg/util/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,13 +42,13 @@ func defaultWasmFixtures() (*autoscalingv1.FleetAutoscaler, *agonesv1.Fleet) {
 
 	// Set up WasmPolicy
 	url := "plugin.wasm"
-	fas.Spec.Policy.Wasm = &apis.WasmPolicy{
+	fas.Spec.Policy.Wasm = &pluginsv1.WasmPolicy{
 		Function: "scale",
 		Config: map[string]string{
 			"buffer_size": "5",
 		},
-		From: apis.WasmFrom{
-			URL: &apis.URLConfiguration{
+		From: pluginsv1.WasmFrom{
+			URL: &pluginsv1.URLConfiguration{
 				URL: &url,
 			},
 		},
@@ -110,7 +110,7 @@ func TestApplyWasmPolicy(t *testing.T) {
 	}
 
 	type testCase struct {
-		wasmPolicy              *apis.WasmPolicy
+		wasmPolicy              *pluginsv1.WasmPolicy
 		fleet                   *agonesv1.Fleet
 		specReplicas            int32
 		statusReplicas          int32
@@ -121,13 +121,13 @@ func TestApplyWasmPolicy(t *testing.T) {
 
 	var testCases = map[string]testCase{
 		"Correct Hash provided (sha256), scale up needed": {
-			wasmPolicy: &apis.WasmPolicy{
+			wasmPolicy: &pluginsv1.WasmPolicy{
 				Function: "scale",
 				Config: map[string]string{
 					"buffer_size": "5",
 				},
-				From: apis.WasmFrom{
-					URL: &apis.URLConfiguration{
+				From: pluginsv1.WasmFrom{
+					URL: &pluginsv1.URLConfiguration{
 						URL: &fileURL,
 					},
 				},
@@ -145,13 +145,13 @@ func TestApplyWasmPolicy(t *testing.T) {
 			},
 		},
 		"Incorrect Hash provided (sha256), plugin creation fails": {
-			wasmPolicy: &apis.WasmPolicy{
+			wasmPolicy: &pluginsv1.WasmPolicy{
 				Function: "scale",
 				Config: map[string]string{
 					"buffer_size": "5",
 				},
-				From: apis.WasmFrom{
-					URL: &apis.URLConfiguration{
+				From: pluginsv1.WasmFrom{
+					URL: &pluginsv1.URLConfiguration{
 						URL: &fileURL,
 					},
 				},
@@ -165,13 +165,13 @@ func TestApplyWasmPolicy(t *testing.T) {
 			},
 		},
 		"Default buffer size (5), scale up needed": {
-			wasmPolicy: &apis.WasmPolicy{
+			wasmPolicy: &pluginsv1.WasmPolicy{
 				Function: "scale",
 				Config: map[string]string{
 					"buffer_size": "5",
 				},
-				From: apis.WasmFrom{
-					URL: &apis.URLConfiguration{
+				From: pluginsv1.WasmFrom{
+					URL: &pluginsv1.URLConfiguration{
 						URL: &fileURL,
 					},
 				},
@@ -188,13 +188,13 @@ func TestApplyWasmPolicy(t *testing.T) {
 			},
 		},
 		"Default buffer size (5), no scaling needed": {
-			wasmPolicy: &apis.WasmPolicy{
+			wasmPolicy: &pluginsv1.WasmPolicy{
 				Function: "scale",
 				Config: map[string]string{
 					"buffer_size": "5",
 				},
-				From: apis.WasmFrom{
-					URL: &apis.URLConfiguration{
+				From: pluginsv1.WasmFrom{
+					URL: &pluginsv1.URLConfiguration{
 						URL: &fileURL,
 					},
 				},
@@ -211,13 +211,13 @@ func TestApplyWasmPolicy(t *testing.T) {
 			},
 		},
 		"Custom buffer size (10), scale up needed": {
-			wasmPolicy: &apis.WasmPolicy{
+			wasmPolicy: &pluginsv1.WasmPolicy{
 				Function: "scale",
 				Config: map[string]string{
 					"buffer_size": "10",
 				},
-				From: apis.WasmFrom{
-					URL: &apis.URLConfiguration{
+				From: pluginsv1.WasmFrom{
+					URL: &pluginsv1.URLConfiguration{
 						URL: &fileURL,
 					},
 				},
@@ -236,10 +236,10 @@ func TestApplyWasmPolicy(t *testing.T) {
 		// Replicates issue #4555: wasm function returns valid JSON that omits the 'response' field,
 		// leaving review.Response nil. Without the nil check this causes a panic.
 		"scaleEmpty returns no 'response' field, nil Response should error not panic": {
-			wasmPolicy: &apis.WasmPolicy{
+			wasmPolicy: &pluginsv1.WasmPolicy{
 				Function: "scaleEmpty",
-				From: apis.WasmFrom{
-					URL: &apis.URLConfiguration{
+				From: pluginsv1.WasmFrom{
+					URL: &pluginsv1.URLConfiguration{
 						URL: &fileURL,
 					},
 				},
@@ -265,13 +265,13 @@ func TestApplyWasmPolicy(t *testing.T) {
 			},
 		},
 		"nil Fleet, error returned": {
-			wasmPolicy: &apis.WasmPolicy{
+			wasmPolicy: &pluginsv1.WasmPolicy{
 				Function: "scale",
 				Config: map[string]string{
 					"buffer_size": "5",
 				},
-				From: apis.WasmFrom{
-					URL: &apis.URLConfiguration{
+				From: pluginsv1.WasmFrom{
+					URL: &pluginsv1.URLConfiguration{
 						URL: &fileURL,
 					},
 				},
@@ -284,13 +284,13 @@ func TestApplyWasmPolicy(t *testing.T) {
 			},
 		},
 		"Invalid URL in WasmPolicy": {
-			wasmPolicy: &apis.WasmPolicy{
+			wasmPolicy: &pluginsv1.WasmPolicy{
 				Function: "scale",
 				Config: map[string]string{
 					"buffer_size": "5",
 				},
-				From: apis.WasmFrom{
-					URL: &apis.URLConfiguration{
+				From: pluginsv1.WasmFrom{
+					URL: &pluginsv1.URLConfiguration{
 						URL: nil,
 					},
 				},
@@ -303,10 +303,10 @@ func TestApplyWasmPolicy(t *testing.T) {
 			},
 		},
 		"Function set to scaleNone, no scaling occurs": {
-			wasmPolicy: &apis.WasmPolicy{
+			wasmPolicy: &pluginsv1.WasmPolicy{
 				Function: "scaleNone",
-				From: apis.WasmFrom{
-					URL: &apis.URLConfiguration{
+				From: pluginsv1.WasmFrom{
+					URL: &pluginsv1.URLConfiguration{
 						URL: &fileURL,
 					},
 				},

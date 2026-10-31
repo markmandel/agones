@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"agones.dev/agones/pkg/apis"
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 	"agones.dev/agones/pkg/util/runtime"
 	"github.com/robfig/cron/v3"
 	apimachineryvalidation "k8s.io/apimachinery/pkg/api/validation"
@@ -74,7 +74,7 @@ type FleetAutoscalerPolicy struct {
 	Buffer *BufferPolicy `json:"buffer,omitempty"`
 	// Webhook policy config params. Present only if FleetAutoscalerPolicyType = Webhook.
 	// +optional
-	Webhook *apis.URLConfiguration `json:"webhook,omitempty"`
+	Webhook *pluginsv1.URLConfiguration `json:"webhook,omitempty"`
 	// [Stage:Beta]
 	// [FeatureFlag:CountsAndLists]
 	// Counter policy config params. Present only if FleetAutoscalerPolicyType = Counter.
@@ -99,7 +99,7 @@ type FleetAutoscalerPolicy struct {
 	// [FeatureFlag:WasmAutoscaler]
 	// Wasm policy config params. Present only if FleetAutoscalerPolicyType = Wasm.
 	// +optional
-	Wasm *apis.WasmPolicy `json:"wasm,omitempty"`
+	Wasm *pluginsv1.WasmPolicy `json:"wasm,omitempty"`
 }
 
 // FleetAutoscalerPolicyType is the policy for autoscaling

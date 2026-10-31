@@ -35,10 +35,10 @@ import (
 	"testing"
 	"time"
 
-	"agones.dev/agones/pkg/apis"
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	allocationv1 "agones.dev/agones/pkg/apis/allocation/v1"
 	autoscalingv1 "agones.dev/agones/pkg/apis/autoscaling/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 	"agones.dev/agones/pkg/util/runtime"
 	helper "agones.dev/agones/test/e2e/allochelper"
 	e2e "agones.dev/agones/test/e2e/framework"
@@ -419,7 +419,7 @@ func TestAutoscalerWebhook(t *testing.T) {
 	fas.Spec.Policy.Type = autoscalingv1.WebhookPolicyType
 	fas.Spec.Policy.Buffer = nil
 	path := "scale"
-	fas.Spec.Policy.Webhook = &apis.URLConfiguration{
+	fas.Spec.Policy.Webhook = &pluginsv1.URLConfiguration{
 		Service: &admregv1.ServiceReference{
 			Name:      svc.ObjectMeta.Name,
 			Namespace: framework.Namespace,
@@ -585,7 +585,7 @@ func TestFleetAutoscalerTLSWebhook(t *testing.T) {
 	fas.Spec.Policy.Buffer = nil
 	path := "scale"
 
-	fas.Spec.Policy.Webhook = &apis.URLConfiguration{
+	fas.Spec.Policy.Webhook = &pluginsv1.URLConfiguration{
 		Service: &admregv1.ServiceReference{
 			Name:      svc.ObjectMeta.Name,
 			Namespace: defaultNS,
@@ -657,7 +657,7 @@ func TestAutoscalerWebhookWithMetadata(t *testing.T) {
 	fas.Spec.Policy.Type = autoscalingv1.WebhookPolicyType
 	fas.Spec.Policy.Buffer = nil
 	path := "scale"
-	fas.Spec.Policy.Webhook = &apis.URLConfiguration{
+	fas.Spec.Policy.Webhook = &pluginsv1.URLConfiguration{
 		Service: &admregv1.ServiceReference{
 			Name:      svc.ObjectMeta.Name,
 			Namespace: framework.Namespace,
@@ -2147,11 +2147,11 @@ func TestWasmAutoScaler(t *testing.T) {
 					FleetName: flt.ObjectMeta.Name,
 					Policy: autoscalingv1.FleetAutoscalerPolicy{
 						Type: autoscalingv1.WasmPolicyType,
-						Wasm: &apis.WasmPolicy{
+						Wasm: &pluginsv1.WasmPolicy{
 							Function: "scale",
 							Config:   make(map[string]string),
-							From: apis.WasmFrom{
-								URL: &apis.URLConfiguration{
+							From: pluginsv1.WasmFrom{
+								URL: &pluginsv1.URLConfiguration{
 									Service: &admregv1.ServiceReference{
 										Namespace: framework.Namespace,
 										Name:      service.ObjectMeta.Name,
