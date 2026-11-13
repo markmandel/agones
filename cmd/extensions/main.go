@@ -64,6 +64,7 @@ const (
 	logSizeLimitMBFlag           = "log-size-limit-mb"
 	allocationBatchWaitTime      = "allocation-batch-wait-time"
 	maxListItemsFlag             = "max-list-items"
+	wasmCacheSizeFlag            = "wasm-cache-size"
 	kubeconfigFlag               = "kubeconfig"
 	defaultResync                = 30 * time.Second
 	apiServerSustainedQPSFlag    = "api-server-qps"
@@ -123,6 +124,9 @@ func main() {
 
 	if ctlConf.MaxListItems <= 0 {
 		logger.Fatalf("%s must be greater than 0", maxListItemsFlag)
+	}
+	if ctlConf.WasmCacheSize <= 0 {
+		logger.Fatalf("%s must be greater than 0", wasmCacheSizeFlag)
 	}
 
 	// if the kubeconfig fails InClusterBuildConfig will try in cluster config
@@ -229,7 +233,7 @@ func main() {
 
 		gasExtensions = gameserverallocations.NewExtensions(api, health, gsCounter, kubeClient, kubeInformerFactory,
 			agonesClient, agonesInformerFactory, 10*time.Second, 30*time.Second, ctlConf.AllocationBatchWaitTime,
-			ctlConf.MaxListItems)
+			ctlConf.MaxListItems, ctlConf.WasmCacheSize)
 
 		kubeInformerFactory.Start(ctx.Done())
 		agonesInformerFactory.Start(ctx.Done())
@@ -278,6 +282,7 @@ func parseEnvFlags() config {
 	viper.SetDefault(httpPort, "8080")
 	viper.SetDefault(webhookPort, "8081")
 	viper.SetDefault(maxListItemsFlag, 1000)
+	viper.SetDefault(wasmCacheSizeFlag, 10)
 
 	viper.SetDefault(processorGRPCAddress, "agones-processor.agones-system.svc.cluster.local")
 	viper.SetDefault(processorGRPCPort, 9090)
@@ -302,6 +307,7 @@ func parseEnvFlags() config {
 	pflag.String(logLevelFlag, viper.GetString(logLevelFlag), "Agones Log level")
 	pflag.Duration(allocationBatchWaitTime, viper.GetDuration(allocationBatchWaitTime), "Flag to configure the waiting period between allocations batches")
 	pflag.Int64(maxListItemsFlag, viper.GetInt64(maxListItemsFlag), "Flag to set the maximum Capacity a GameServer List may be set to during allocation. Can also use MAX_LIST_ITEMS env variable")
+	pflag.Int(wasmCacheSizeFlag, viper.GetInt(wasmCacheSizeFlag), "Flag to set the maximum number of compiled Wasm modules that are cached for allocation. Can also use WASM_CACHE_SIZE env variable.")
 	pflag.Duration(readinessShutdownDuration, viper.GetDuration(readinessShutdownDuration), "Time in seconds for SIGTERM handler to sleep for.")
 
 	pflag.String(processorGRPCAddress, viper.GetString(processorGRPCAddress), "The gRPC address of the Agones Processor service")
@@ -333,6 +339,7 @@ func parseEnvFlags() config {
 	runtime.Must(viper.BindEnv(webhookPort))
 	runtime.Must(viper.BindEnv(allocationBatchWaitTime))
 	runtime.Must(viper.BindEnv(maxListItemsFlag))
+	runtime.Must(viper.BindEnv(wasmCacheSizeFlag))
 	runtime.Must(viper.BindPFlags(pflag.CommandLine))
 	runtime.Must(viper.BindEnv(readinessShutdownDuration))
 	runtime.Must(cloudproduct.BindEnv())
@@ -359,6 +366,7 @@ func parseEnvFlags() config {
 		WebhookPort:               viper.GetString(webhookPort),
 		AllocationBatchWaitTime:   viper.GetDuration(allocationBatchWaitTime),
 		MaxListItems:              viper.GetInt64(maxListItemsFlag),
+		WasmCacheSize:             viper.GetInt(wasmCacheSizeFlag),
 		ReadinessShutdownDuration: viper.GetDuration(readinessShutdownDuration),
 
 		processorGRPCAddress:  viper.GetString(processorGRPCAddress),
@@ -388,6 +396,7 @@ type config struct {
 	WebhookPort               string
 	AllocationBatchWaitTime   time.Duration
 	MaxListItems              int64
+	WasmCacheSize             int
 	ReadinessShutdownDuration time.Duration
 
 	processorGRPCAddress  string

@@ -43,6 +43,9 @@ import (
 // defaultTestListMaxCapacity mirrors the `gameservers.lists.maxItems` Helm default.
 const defaultTestListMaxCapacity = int64(1000)
 
+// defaultTestWasmCacheSize mirrors the `agones.allocator.wasmCacheSize` Helm default.
+const defaultTestWasmCacheSize = 10
+
 func TestAllocatorAllocate(t *testing.T) {
 	t.Parallel()
 
@@ -247,7 +250,7 @@ func TestAllocatorApplyAllocationToGameServer(t *testing.T) {
 		m.AgonesClient.AgonesV1(), m.KubeClient,
 		NewAllocationCache(m.AgonesInformerFactory.Agones().V1().GameServers(), gameservers.NewPerNodeCounter(m.KubeInformerFactory, m.AgonesInformerFactory), healthcheck.NewHandler()),
 		time.Second, 5*time.Second, 500*time.Millisecond,
-		defaultTestListMaxCapacity,
+		defaultTestListMaxCapacity, defaultTestWasmCacheSize,
 	)
 
 	gs, err := allocator.applyAllocationToGameServer(ctx, allocationv1.MetaPatch{}, &agonesv1.GameServer{}, &allocationv1.GameServerAllocation{})
@@ -291,7 +294,7 @@ func TestAllocatorApplyAllocationToGameServerCountsListsActions(t *testing.T) {
 		m.AgonesClient.AgonesV1(), m.KubeClient,
 		NewAllocationCache(m.AgonesInformerFactory.Agones().V1().GameServers(), gameservers.NewPerNodeCounter(m.KubeInformerFactory, m.AgonesInformerFactory), healthcheck.NewHandler()),
 		time.Second, 5*time.Second, 500*time.Millisecond,
-		defaultTestListMaxCapacity,
+		defaultTestListMaxCapacity, defaultTestWasmCacheSize,
 	)
 
 	ONE := int64(1)
@@ -428,7 +431,7 @@ func TestAllocationApplyAllocationError(t *testing.T) {
 		m.AgonesClient.AgonesV1(), m.KubeClient,
 		NewAllocationCache(m.AgonesInformerFactory.Agones().V1().GameServers(), gameservers.NewPerNodeCounter(m.KubeInformerFactory, m.AgonesInformerFactory), healthcheck.NewHandler()),
 		time.Second, 5*time.Second, 500*time.Millisecond,
-		defaultTestListMaxCapacity,
+		defaultTestListMaxCapacity, defaultTestWasmCacheSize,
 	)
 
 	gsa, err := allocator.applyAllocationToGameServer(ctx, allocationv1.MetaPatch{}, &agonesv1.GameServer{}, &allocationv1.GameServerAllocation{})
@@ -1110,7 +1113,8 @@ func newFakeAllocator() (*Allocator, agtesting.Mocks) {
 		time.Second,
 		5*time.Second,
 		500*time.Millisecond,
-		defaultTestListMaxCapacity)
+		defaultTestListMaxCapacity,
+		defaultTestWasmCacheSize)
 	a.recorder = m.FakeRecorder
 
 	return a, m

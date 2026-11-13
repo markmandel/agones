@@ -23,6 +23,7 @@ package v1
 
 import (
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 	corev1 "k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -173,6 +174,11 @@ func (in *GameServerAllocationSpec) DeepCopyInto(out *GameServerAllocationSpec) 
 		for key, val := range *in {
 			(*out)[key] = *val.DeepCopy()
 		}
+	}
+	if in.Wasm != nil {
+		in, out := &in.Wasm, &out.Wasm
+		*out = new(pluginsv1.WasmPolicy)
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }

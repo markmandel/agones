@@ -6941,7 +6941,7 @@ spec:
                               required:
                                 - from
                               properties:
-                                function: # The exported function to call in the wasm module, defaults to 'scale'
+                                function: # The exported function to call in the wasm module
                                   type: string
                                   default: "scale"
                                 config: # Config values to pass to the wasm program on startup
@@ -6953,7 +6953,7 @@ spec:
                                   required:
                                     - url
                                   properties:
-                                    url:              
+                                    url:          
                                       type: object
                                       nullable: true
                                       properties:
@@ -7206,7 +7206,7 @@ spec:
                                     required:
                                       - from
                                     properties:
-                                      function: # The exported function to call in the wasm module, defaults to 'scale'
+                                      function: # The exported function to call in the wasm module
                                         type: string
                                         default: "scale"
                                       config: # Config values to pass to the wasm program on startup
@@ -7218,7 +7218,7 @@ spec:
                                         required:
                                           - url
                                         properties:
-                                          url:              
+                                          url:          
                                             type: object
                                             nullable: true
                                             properties:
@@ -7250,7 +7250,7 @@ spec:
                             required:
                               - from
                             properties:
-                              function: # The exported function to call in the wasm module, defaults to 'scale'
+                              function: # The exported function to call in the wasm module
                                 type: string
                                 default: "scale"
                               config: # Config values to pass to the wasm program on startup
@@ -7262,7 +7262,7 @@ spec:
                                 required:
                                   - url
                                 properties:
-                                  url:              
+                                  url:          
                                     type: object
                                     nullable: true
                                     properties:
@@ -7294,7 +7294,7 @@ spec:
                       required:
                         - from
                       properties:
-                        function: # The exported function to call in the wasm module, defaults to 'scale'
+                        function: # The exported function to call in the wasm module
                           type: string
                           default: "scale"
                         config: # Config values to pass to the wasm program on startup
@@ -7306,7 +7306,7 @@ spec:
                           required:
                             - url
                           properties:
-                            url:              
+                            url:          
                               type: object
                               nullable: true
                               properties:
@@ -20911,6 +20911,8 @@ spec:
           value: "500ms"
         - name: MAX_LIST_ITEMS
           value: "1000"
+        - name: WASM_CACHE_SIZE
+          value: "10"
         - name: CLOUD_PRODUCT
           value: "auto"
         - name: LOG_DIR
@@ -21173,6 +21175,8 @@ spec:
           value: "500ms"
         - name: MAX_LIST_ITEMS
           value: "1000"
+        - name: WASM_CACHE_SIZE
+          value: "10"
         - name: READINESS_SHUTDOWN_DURATION
           value: 18s
         ports:

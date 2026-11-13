@@ -21,6 +21,8 @@ import (
 
 	"agones.dev/agones/pkg/apis"
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
+	"agones.dev/agones/pkg/util/runtime"
 	"github.com/mitchellh/hashstructure/v2"
 	corev1 "k8s.io/api/core/v1"
 	apivalidation "k8s.io/apimachinery/pkg/api/validation"
@@ -28,6 +30,12 @@ import (
 	metav1validation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+)
+
+const (
+	// DefaultWasmFunction is the exported function that is called in a Wasm module on allocation,
+	// when no function is specified.
+	DefaultWasmFunction = "allocate"
 )
 
 const (
@@ -122,6 +130,13 @@ type GameServerAllocationSpec struct {
 	// List actions to perform during allocation.
 	// +optional
 	Lists map[string]ListAction `json:"lists,omitempty" hash:"ignore"`
+	// [Stage:Alpha]
+	// [FeatureFlag:WasmAllocation]
+	// Wasm is a Wasm plugin that is run against the selected GameServer during allocation.
+	// The plugin function is passed the GameServer as JSON, and returns the GameServer as JSON
+	// with any changes that should be applied as part of the allocation.
+	// +optional
+	Wasm *pluginsv1.WasmPolicy `json:"wasm,omitempty" hash:"ignore"`
 }
 
 // GameServerSelector contains all the filter options for selecting
@@ -541,6 +556,10 @@ func (gsa *GameServerAllocation) ApplyDefaults() {
 		}
 	}
 
+	if gsa.Spec.Wasm != nil && gsa.Spec.Wasm.Function == "" {
+		gsa.Spec.Wasm.Function = DefaultWasmFunction
+	}
+
 	if len(gsa.Spec.Selectors) == 0 {
 		gsa.Spec.Required.ApplyDefaults()
 
@@ -579,6 +598,10 @@ func (gsa *GameServerAllocation) Validate() field.ErrorList {
 	}
 	if gsa.Spec.Lists != nil {
 		allErrs = append(allErrs, validateListActions(gsa.Spec.Lists, specPath.Child("lists"))...)
+	}
+
+	if gsa.Spec.Wasm != nil {
+		allErrs = append(allErrs, gsa.Spec.Wasm.ValidateWasmPolicy(specPath.Child("wasm"), runtime.FeatureWasmAllocation)...)
 	}
 
 	allErrs = append(allErrs, gsa.Spec.MetaPatch.Validate(specPath.Child("metadata"))...)

@@ -98,6 +98,47 @@ message AllocationRequest {
   // on Counters and Lists during allocation.
   map<string, CounterAction> counters = 10;
   map<string, ListAction> lists = 11;
+
+  // [Stage: Alpha]
+  // [FeatureFlag:WasmAllocation]
+  // Wasm is a Wasm plugin that is run against the selected GameServer during allocation.
+  // The plugin function is passed the GameServer as JSON, and returns the GameServer as JSON
+  // with any changes that should be applied as part of the allocation.
+  WasmPolicy wasm = 12;
+}
+
+// URLConfiguration is the configuration for an external URL or cluster provided service.
+// Either url or service must be set, but not both.
+message URLConfiguration {
+  // ServiceReference is a reference to a Service in the cluster.
+  message ServiceReference {
+    string namespace = 1;
+    string name = 2;
+    google.protobuf.StringValue path = 3;
+    google.protobuf.Int32Value port = 4;
+  }
+
+  google.protobuf.StringValue url = 1;
+  ServiceReference service = 2;
+  // PEM encoded CA bundle, used to validate the server certificate.
+  bytes caBundle = 3;
+}
+
+// WasmFrom defines the source of the Wasm module.
+message WasmFrom {
+  URLConfiguration url = 1;
+}
+
+// WasmPolicy contains the configuration for a Wasm module that runs as a plugin to Agones.
+// Function: The exported function to call in the Wasm module (optional). Defaults to "allocate".
+// Config: Config values to pass to the Wasm module (optional).
+// From: The source of the Wasm module.
+// Hash: sha256 hash of the Wasm module, used to verify its integrity (optional).
+message WasmPolicy {
+  string function = 1;
+  map<string, string> config = 2;
+  WasmFrom from = 3;
+  string hash = 4;
 }
 
 message AllocationResponse {

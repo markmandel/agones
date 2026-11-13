@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	goErrors "errors"
 	"fmt"
 	"maps"
@@ -30,6 +31,7 @@ import (
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	allocationv1 "agones.dev/agones/pkg/apis/allocation/v1"
 	multiclusterv1 "agones.dev/agones/pkg/apis/multicluster/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 	getterv1 "agones.dev/agones/pkg/client/clientset/versioned/typed/agones/v1"
 	multiclusterinformerv1 "agones.dev/agones/pkg/client/informers/externalversions/multicluster/v1"
 	multiclusterlisterv1 "agones.dev/agones/pkg/client/listers/multicluster/v1"
@@ -37,6 +39,7 @@ import (
 	"agones.dev/agones/pkg/util/errors"
 	"agones.dev/agones/pkg/util/logfields"
 	"agones.dev/agones/pkg/util/runtime"
+	"agones.dev/agones/pkg/util/wasm"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/tag"
 	"google.golang.org/grpc"
@@ -69,6 +72,8 @@ var (
 	ErrTotalTimeoutExceeded = status.Errorf(codes.DeadlineExceeded, "remote allocation total timeout exceeded")
 	// ErrGameServerUpdateConflict is returned when the game server selected for applying the allocation cannot be updated
 	ErrGameServerUpdateConflict = errs.New("could not update the selected GameServer")
+	// ErrWasmPlugin is returned when the Wasm plugin for an allocation could not be run, or returned an invalid result
+	ErrWasmPlugin = errs.New("could not apply the Wasm plugin to the selected GameServer")
 )
 
 const (
@@ -116,6 +121,7 @@ type Allocator struct {
 	totalRemoteAllocationTimeout time.Duration
 	batchWaitTime                time.Duration
 	listMaxCapacity              int64
+	wasmCache                    *wasm.Cache
 	errs                         *errors.Errors
 }
 
@@ -136,7 +142,10 @@ type response struct {
 // NewAllocator creates an instance of Allocator
 func NewAllocator(policyInformer multiclusterinformerv1.GameServerAllocationPolicyInformer, secretInformer informercorev1.SecretInformer, gameServerGetter getterv1.GameServersGetter,
 	kubeClient kubernetes.Interface, allocationCache *AllocationCache, remoteAllocationTimeout time.Duration, totalRemoteAllocationTimeout time.Duration, batchWaitTime time.Duration,
-	listMaxCapacity int64) *Allocator {
+	listMaxCapacity int64, wasmCacheSize int) *Allocator {
+	wasmCache, err := wasm.NewCache(wasmCacheSize)
+	runtime.Must(err)
+
 	ah := &Allocator{
 		pendingRequests:              make(chan request, maxBatchQueue),
 		allocationPolicyLister:       policyInformer.Lister(),
@@ -147,6 +156,7 @@ func NewAllocator(policyInformer multiclusterinformerv1.GameServerAllocationPoli
 		allocationCache:              allocationCache,
 		batchWaitTime:                batchWaitTime,
 		listMaxCapacity:              listMaxCapacity,
+		wasmCache:                    wasmCache,
 		remoteAllocationTimeout:      remoteAllocationTimeout,
 		totalRemoteAllocationTimeout: totalRemoteAllocationTimeout,
 		remoteAllocationCallback: func(ctx context.Context, endpoint string, dialOpts grpc.DialOption, request *pb.AllocationRequest) (*pb.AllocationResponse, error) {
@@ -277,6 +287,11 @@ func (c *Allocator) allocateFromLocalCluster(ctx context.Context, gsa *allocatio
 		}
 		return err
 	})
+
+	if goErrors.Is(err, ErrWasmPlugin) {
+		// the cache is still correct, as the GameServer was not updated, so there is no need to resync.
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 
 	if err != nil && !goErrors.Is(err, ErrNoGameServer) && !goErrors.Is(err, ErrConflictInGameServerSelection) {
 		c.allocationCache.Resync()
@@ -620,7 +635,11 @@ func (c *Allocator) allocationUpdateWorkers(ctx context.Context, workerCount int
 							// we should wait for it to get updated with fresh info.
 							c.allocationCache.AddGameServer(gs)
 						}
-						res.err = ErrGameServerUpdateConflict
+						if goErrors.Is(err, ErrWasmPlugin) {
+							res.err = err
+						} else {
+							res.err = ErrGameServerUpdateConflict
+						}
 					} else {
 						// put the GameServer back into the cache, so it's immediately around for re-allocation
 						c.allocationCache.AddGameServer(gs)
@@ -650,6 +669,12 @@ func (c *Allocator) tryRespondWithError(req request, err error) {
 // applyAllocationToGameServer patches the inputted GameServer with the allocation metadata changes, and updates it to the Allocated State.
 // Returns the updated GameServer.
 func (c *Allocator) applyAllocationToGameServer(ctx context.Context, mp allocationv1.MetaPatch, gs *agonesv1.GameServer, gsa *allocationv1.GameServerAllocation) (*agonesv1.GameServer, error) {
+	// keep the original, so if the Wasm plugin fails, the GameServer can be returned to the cache as it was.
+	var original *agonesv1.GameServer
+	if gsa.Spec.Wasm != nil {
+		original = gs.DeepCopy()
+	}
+
 	// patch ObjectMeta labels
 	if mp.Labels != nil {
 		if gs.ObjectMeta.Labels == nil {
@@ -687,6 +712,13 @@ func (c *Allocator) applyAllocationToGameServer(ctx context.Context, mp allocati
 		}
 	}
 
+	if gsa.Spec.Wasm != nil {
+		gs, err = c.applyWasmPolicy(ctx, gsa.Spec.Wasm, gs)
+		if err != nil {
+			return original, err
+		}
+	}
+
 	gsUpdate, updateErr := c.gameServerGetter.GameServers(gs.ObjectMeta.Namespace).Update(ctx, gs, metav1.UpdateOptions{})
 	if updateErr != nil {
 		return gsUpdate, updateErr
@@ -702,6 +734,51 @@ func (c *Allocator) applyAllocationToGameServer(ctx context.Context, mp allocati
 	c.recorder.Event(gsUpdate, corev1.EventTypeNormal, string(gsUpdate.Status.State), "Allocated")
 
 	return gsUpdate, updateErr
+}
+
+// applyWasmPolicy passes the GameServer to the Wasm plugin, and returns the GameServer that the plugin returned.
+// The identity of the GameServer cannot be changed by the plugin, and it will always be Allocated.
+func (c *Allocator) applyWasmPolicy(ctx context.Context, wp *pluginsv1.WasmPolicy, gs *agonesv1.GameServer) (*agonesv1.GameServer, error) {
+	if !runtime.FeatureEnabled(runtime.FeatureWasmAllocation) {
+		return nil, c.errs.Errorf("%w: feature flag %s is not enabled", ErrWasmPlugin, runtime.FeatureWasmAllocation)
+	}
+
+	input, err := json.Marshal(gs)
+	if err != nil {
+		return nil, c.errs.Errorf("%w: could not marshal GameServer: %w", ErrWasmPlugin, err)
+	}
+
+	output, err := c.wasmCache.Call(ctx, wp, input)
+	if err != nil {
+		return nil, c.errs.Errorf("%w: %w", ErrWasmPlugin, err)
+	}
+
+	result := &agonesv1.GameServer{}
+	if err := json.Unmarshal(output, result); err != nil {
+		return nil, c.errs.Errorf("%w: could not unmarshal GameServer returned from function %q: %w", ErrWasmPlugin, wp.Function, err)
+	}
+
+	// the plugin cannot change which GameServer this is.
+	result.TypeMeta = gs.TypeMeta
+	result.ObjectMeta.Name = gs.ObjectMeta.Name
+	result.ObjectMeta.GenerateName = gs.ObjectMeta.GenerateName
+	result.ObjectMeta.Namespace = gs.ObjectMeta.Namespace
+	result.ObjectMeta.UID = gs.ObjectMeta.UID
+	result.ObjectMeta.ResourceVersion = gs.ObjectMeta.ResourceVersion
+	result.ObjectMeta.Generation = gs.ObjectMeta.Generation
+	result.ObjectMeta.CreationTimestamp = gs.ObjectMeta.CreationTimestamp
+	result.ObjectMeta.DeletionTimestamp = gs.ObjectMeta.DeletionTimestamp
+	result.ObjectMeta.DeletionGracePeriodSeconds = gs.ObjectMeta.DeletionGracePeriodSeconds
+	result.ObjectMeta.ManagedFields = gs.ObjectMeta.ManagedFields
+
+	// and it is always allocated.
+	if result.ObjectMeta.Annotations == nil {
+		result.ObjectMeta.Annotations = map[string]string{}
+	}
+	result.ObjectMeta.Annotations[LastAllocatedAnnotationKey] = gs.ObjectMeta.Annotations[LastAllocatedAnnotationKey]
+	result.Status.State = agonesv1.GameServerStateAllocated
+
+	return result, nil
 }
 
 // Retry retries fn based on backoff provided.
@@ -720,7 +797,7 @@ func Retry(backoff wait.Backoff, fn func() error) error {
 		switch {
 		case err == nil:
 			return true, nil
-		case goErrors.Is(err, ErrNoGameServer), goErrors.Is(err, ErrTotalTimeoutExceeded):
+		case goErrors.Is(err, ErrNoGameServer), goErrors.Is(err, ErrTotalTimeoutExceeded), goErrors.Is(err, ErrWasmPlugin):
 			return true, err
 		default:
 			lastConflictErr = err

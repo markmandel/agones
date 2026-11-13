@@ -76,6 +76,7 @@ func NewExtensions(apiServer *apiserver.APIServer,
 	totalAllocationTimeout time.Duration,
 	allocationBatchWaitTime time.Duration,
 	listMaxCapacity int64,
+	wasmCacheSize int,
 ) *Extensions {
 	c := &Extensions{
 		api: apiServer,
@@ -90,7 +91,8 @@ func NewExtensions(apiServer *apiserver.APIServer,
 		remoteAllocationTimeout,
 		totalAllocationTimeout,
 		allocationBatchWaitTime,
-		listMaxCapacity)
+		listMaxCapacity,
+		wasmCacheSize)
 
 	c.baseLogger = runtime.NewLoggerWithType(c)
 	c.errs = errors.FromStruct(c)

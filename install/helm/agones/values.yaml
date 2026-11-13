@@ -294,6 +294,7 @@ agones:
     remoteAllocationTimeout: 10s
     totalRemoteAllocationTimeout: 30s
     allocationBatchWaitTime: 500ms
+    wasmCacheSize: 10
     topologySpreadConstraints: []
     env: []
     processor:

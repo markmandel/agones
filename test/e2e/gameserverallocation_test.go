@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	admregv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -34,6 +36,7 @@ import (
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	allocationv1 "agones.dev/agones/pkg/apis/allocation/v1"
 	multiclusterv1 "agones.dev/agones/pkg/apis/multicluster/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 	"agones.dev/agones/pkg/util/runtime"
 	e2e "agones.dev/agones/test/e2e/framework"
 )
@@ -1415,4 +1418,124 @@ func TestGameServerAllocationDuringMultipleAllocationClients(t *testing.T) {
 	default:
 		t.Logf("Number of GameServers allocated: %d. This matches the expected outcome.", uniqueAllocatedGSs)
 	}
+}
+
+func TestGameServerAllocationWasm(t *testing.T) {
+	if !runtime.FeatureEnabled(runtime.FeatureWasmAllocation) {
+		t.SkipNow()
+	}
+	t.Parallel()
+	ctx := context.Background()
+	client := framework.AgonesClient.AgonesV1()
+	listName := "freeSessions"
+	sessions := []string{"session-1", "session-2", "session-3"}
+
+	server := createWasmServer(ctx, t, filepath.Join("..", "..", "examples", "allocation-wasm", "plugin.wasm"))
+
+	flt := defaultFleet(framework.Namespace)
+	flt.Spec.Template.Spec.Lists = map[string]agonesv1.ListStatus{
+		listName: {Values: sessions, Capacity: int64(len(sessions))},
+	}
+	flt, err := client.Fleets(framework.Namespace).Create(ctx, flt.DeepCopy(), metav1.CreateOptions{})
+	require.NoError(t, err)
+	defer client.Fleets(framework.Namespace).Delete(ctx, flt.ObjectMeta.Name, metav1.DeleteOptions{}) //nolint:errcheck
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(flt.Spec.Replicas))
+
+	fleetSelector := metav1.LabelSelector{MatchLabels: map[string]string{agonesv1.FleetNameLabel: flt.ObjectMeta.Name}}
+	allocated := agonesv1.GameServerStateAllocated
+	ready := agonesv1.GameServerStateReady
+	fixture := func() *allocationv1.GameServerAllocation {
+		return &allocationv1.GameServerAllocation{
+			Spec: allocationv1.GameServerAllocationSpec{
+				Priorities: []agonesv1.Priority{
+					{Type: agonesv1.GameServerPriorityList, Key: listName, Order: agonesv1.GameServerPriorityDescending},
+				},
+				Selectors: []allocationv1.GameServerSelector{
+					// an Allocated GameServer that still has at least one free session.
+					{
+						LabelSelector:   fleetSelector,
+						GameServerState: &allocated,
+						Lists:           map[string]allocationv1.ListSelector{listName: {MaxAvailable: int64(len(sessions) - 1)}},
+					},
+					{LabelSelector: fleetSelector, GameServerState: &ready},
+				},
+				Wasm: &pluginsv1.WasmPolicy{
+					Config: map[string]string{"list": listName},
+					From: pluginsv1.WasmFrom{URL: &pluginsv1.URLConfiguration{
+						Service: &admregv1.ServiceReference{
+							Namespace: server.service.ObjectMeta.Namespace,
+							Name:      server.service.ObjectMeta.Name,
+							Path:      &server.path,
+							Port:      &server.port,
+						},
+					}},
+					Hash: server.hash,
+				},
+			},
+		}
+	}
+	allocations := framework.AgonesClient.AllocationV1().GameServerAllocations(framework.Namespace)
+
+	// each allocation takes the next session from the same GameServer, until it has none left.
+	var first string
+	for i, session := range sessions {
+		gsa, err := allocations.Create(ctx, fixture(), metav1.CreateOptions{})
+		require.NoError(t, err)
+		require.Equal(t, allocationv1.GameServerAllocationAllocated, gsa.Status.State)
+		if i == 0 {
+			first = gsa.Status.GameServerName
+		}
+		assert.Equal(t, first, gsa.Status.GameServerName)
+		assert.Equal(t, session, gsa.Status.Metadata.Annotations["session"])
+		assert.Equal(t, sessions[i+1:], gsa.Status.Lists[listName].Values)
+
+		gs, err := client.GameServers(framework.Namespace).Get(ctx, gsa.Status.GameServerName, metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, agonesv1.GameServerStateAllocated, gs.Status.State)
+		assert.Equal(t, session, gs.ObjectMeta.Annotations["session"])
+		assert.Equal(t, sessions[i+1:], gs.Status.Lists[listName].Values)
+
+		// wait for the update to be seen through the GameServer watches, as the allocation caches are, so the next
+		// allocation selects the same GameServer.
+		freeSessions := int64(len(sessions))*int64(flt.Spec.Replicas) - int64(i+1)
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			f, err := client.Fleets(framework.Namespace).Get(ctx, flt.ObjectMeta.Name, metav1.GetOptions{})
+			require.NoError(c, err)
+			assert.Equal(c, int32(1), f.Status.AllocatedReplicas)
+			assert.Equal(c, freeSessions, f.Status.Lists[listName].Count)
+		}, time.Minute, time.Second)
+	}
+
+	// there are no free sessions left, so the next allocation is on another GameServer.
+	gsa, err := allocations.Create(ctx, fixture(), metav1.CreateOptions{})
+	require.NoError(t, err)
+	require.Equal(t, allocationv1.GameServerAllocationAllocated, gsa.Status.State)
+	assert.NotEqual(t, first, gsa.Status.GameServerName)
+	assert.Equal(t, sessions[0], gsa.Status.Metadata.Annotations["session"])
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(flt.Spec.Replicas-2))
+
+	// if the plugin can't be run, the allocation fails, and no GameServer is allocated.
+	for name, change := range map[string]func(*pluginsv1.WasmPolicy){
+		"bad hash":         func(wp *pluginsv1.WasmPolicy) { wp.Hash = server.badHash },
+		"missing function": func(wp *pluginsv1.WasmPolicy) { wp.Function = "missing" },
+	} {
+		gsa := fixture()
+		// only select Ready GameServers, as they still have sessions to allocate.
+		gsa.Spec.Selectors = gsa.Spec.Selectors[1:]
+		change(gsa.Spec.Wasm)
+		_, err := allocations.Create(ctx, gsa, metav1.CreateOptions{})
+		require.Error(t, err, name)
+	}
+	// a failed allocation does not update the GameServer, so there is nothing to wait for.
+	list, err := client.GameServers(framework.Namespace).List(ctx, metav1.ListOptions{LabelSelector: metav1.FormatLabelSelector(&fleetSelector)})
+	require.NoError(t, err)
+	allocatedCount := 0
+	for _, gs := range list.Items {
+		if gs.Status.State == agonesv1.GameServerStateAllocated {
+			allocatedCount++
+			continue
+		}
+		assert.Equal(t, sessions, gs.Status.Lists[listName].Values, gs.ObjectMeta.Name)
+	}
+	assert.Equal(t, 2, allocatedCount)
 }

@@ -148,6 +148,8 @@ spec:
           value: {{ .Values.agones.allocator.processor.allocationBatchWaitTime | quote }}
         - name: MAX_LIST_ITEMS
           value: {{ .Values.gameservers.lists.maxItems | quote }}
+        - name: WASM_CACHE_SIZE
+          value: {{ .Values.agones.allocator.wasmCacheSize | quote }}
         {{- if .Values.agones.allocator.processor.env }}
          {{- toYaml .Values.agones.allocator.processor.env | nindent 8 }}
         {{- end }}

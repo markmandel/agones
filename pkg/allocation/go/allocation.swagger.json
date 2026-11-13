@@ -152,6 +152,25 @@
       ],
       "default": "Ascending"
     },
+    "URLConfigurationServiceReference": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "ServiceReference is a reference to a Service in the cluster."
+    },
     "allocationAllocationRequest": {
       "type": "object",
       "properties": {
@@ -215,6 +234,10 @@
           "additionalProperties": {
             "$ref": "#/definitions/allocationListAction"
           }
+        },
+        "wasm": {
+          "$ref": "#/definitions/allocationWasmPolicy",
+          "description": "[Stage: Alpha]\n[FeatureFlag:WasmAllocation]\nWasm is a Wasm plugin that is run against the selected GameServer during allocation.\nThe plugin function is passed the GameServer as JSON, and returns the GameServer as JSON\nwith any changes that should be applied as part of the allocation."
         }
       }
     },
@@ -469,6 +492,53 @@
         "List"
       ],
       "default": "Counter"
+    },
+    "allocationURLConfiguration": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "service": {
+          "$ref": "#/definitions/URLConfigurationServiceReference"
+        },
+        "caBundle": {
+          "type": "string",
+          "format": "byte",
+          "description": "PEM encoded CA bundle, used to validate the server certificate."
+        }
+      },
+      "description": "URLConfiguration is the configuration for an external URL or cluster provided service.\nEither url or service must be set, but not both."
+    },
+    "allocationWasmFrom": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "$ref": "#/definitions/allocationURLConfiguration"
+        }
+      },
+      "description": "WasmFrom defines the source of the Wasm module."
+    },
+    "allocationWasmPolicy": {
+      "type": "object",
+      "properties": {
+        "function": {
+          "type": "string"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "from": {
+          "$ref": "#/definitions/allocationWasmFrom"
+        },
+        "hash": {
+          "type": "string"
+        }
+      },
+      "description": "WasmPolicy contains the configuration for a Wasm module that runs as a plugin to Agones.\nFunction: The exported function to call in the Wasm module (optional). Defaults to \"allocate\".\nConfig: Config values to pass to the Wasm module (optional).\nFrom: The source of the Wasm module.\nHash: sha256 hash of the Wasm module, used to verify its integrity (optional)."
     }
   }
 }

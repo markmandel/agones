@@ -21,7 +21,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	admregv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -29,6 +31,7 @@ import (
 	"agones.dev/agones/pkg/apis"
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	allocationv1 "agones.dev/agones/pkg/apis/allocation/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 	"agones.dev/agones/pkg/util/runtime"
 )
 
@@ -1624,6 +1627,86 @@ func TestConvertAllocationResponseToGSA(t *testing.T) {
 			if !assert.Equal(t, tc.want, out) {
 				t.Errorf("mismatch with want after conversion: \"%s\"", tc.name)
 			}
+		})
+	}
+}
+
+func TestConvertWasmPolicy(t *testing.T) {
+	t.Parallel()
+
+	url := "http://example.com/plugin.wasm"
+	path := "/plugin.wasm"
+	port := int32(8080)
+
+	tests := []struct {
+		name string
+		gsa  *pluginsv1.WasmPolicy
+		pb   *pb.WasmPolicy
+	}{
+		{
+			name: "nil",
+		},
+		{
+			name: "no source",
+			gsa:  &pluginsv1.WasmPolicy{Function: "allocate"},
+			pb:   &pb.WasmPolicy{Function: "allocate"},
+		},
+		{
+			name: "url",
+			gsa: &pluginsv1.WasmPolicy{
+				Function: "allocate",
+				Config:   map[string]string{"list": "freeSessions"},
+				From:     pluginsv1.WasmFrom{URL: &pluginsv1.URLConfiguration{URL: &url}},
+				Hash:     "abcd",
+			},
+			pb: &pb.WasmPolicy{
+				Function: "allocate",
+				Config:   map[string]string{"list": "freeSessions"},
+				From:     &pb.WasmFrom{Url: &pb.URLConfiguration{Url: wrapperspb.String(url)}},
+				Hash:     "abcd",
+			},
+		},
+		{
+			name: "service",
+			gsa: &pluginsv1.WasmPolicy{
+				From: pluginsv1.WasmFrom{URL: &pluginsv1.URLConfiguration{
+					Service:  &admregv1.ServiceReference{Namespace: "default", Name: "wasm-server", Path: &path, Port: &port},
+					CABundle: []byte("ca"),
+				}},
+			},
+			pb: &pb.WasmPolicy{
+				From: &pb.WasmFrom{Url: &pb.URLConfiguration{
+					Service: &pb.URLConfiguration_ServiceReference{
+						Namespace: "default", Name: "wasm-server", Path: wrapperspb.String(path), Port: wrapperspb.Int32(port),
+					},
+					CaBundle: []byte("ca"),
+				}},
+			},
+		},
+		{
+			name: "service without path or port",
+			gsa: &pluginsv1.WasmPolicy{
+				From: pluginsv1.WasmFrom{URL: &pluginsv1.URLConfiguration{
+					Service: &admregv1.ServiceReference{Namespace: "default", Name: "wasm-server"},
+				}},
+			},
+			pb: &pb.WasmPolicy{
+				From: &pb.WasmFrom{Url: &pb.URLConfiguration{
+					Service: &pb.URLConfiguration_ServiceReference{Namespace: "default", Name: "wasm-server"},
+				}},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			request := ConvertGSAToAllocationRequest(&allocationv1.GameServerAllocation{
+				Spec: allocationv1.GameServerAllocationSpec{Wasm: tc.gsa},
+			})
+			assert.True(t, proto.Equal(tc.pb, request.GetWasm()), "expected %v, got %v", tc.pb, request.GetWasm())
+
+			gsa := ConvertAllocationRequestToGSA(&pb.AllocationRequest{Wasm: tc.pb})
+			assert.Equal(t, tc.gsa, gsa.Spec.Wasm)
 		})
 	}
 }

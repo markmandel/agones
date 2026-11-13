@@ -38,6 +38,7 @@ import (
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	allocationv1 "agones.dev/agones/pkg/apis/allocation/v1"
 	autoscalingv1 "agones.dev/agones/pkg/apis/autoscaling/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 	"agones.dev/agones/pkg/util/runtime"
 	helper "agones.dev/agones/test/e2e/allochelper"
 	e2e "agones.dev/agones/test/e2e/framework"
@@ -418,7 +419,7 @@ func TestAutoscalerWebhook(t *testing.T) {
 	fas.Spec.Policy.Type = autoscalingv1.WebhookPolicyType
 	fas.Spec.Policy.Buffer = nil
 	path := "scale"
-	fas.Spec.Policy.Webhook = &autoscalingv1.URLConfiguration{
+	fas.Spec.Policy.Webhook = &pluginsv1.URLConfiguration{
 		Service: &admregv1.ServiceReference{
 			Name:      svc.ObjectMeta.Name,
 			Namespace: framework.Namespace,
@@ -584,7 +585,7 @@ func TestFleetAutoscalerTLSWebhook(t *testing.T) {
 	fas.Spec.Policy.Buffer = nil
 	path := "scale"
 
-	fas.Spec.Policy.Webhook = &autoscalingv1.URLConfiguration{
+	fas.Spec.Policy.Webhook = &pluginsv1.URLConfiguration{
 		Service: &admregv1.ServiceReference{
 			Name:      svc.ObjectMeta.Name,
 			Namespace: defaultNS,
@@ -656,7 +657,7 @@ func TestAutoscalerWebhookWithMetadata(t *testing.T) {
 	fas.Spec.Policy.Type = autoscalingv1.WebhookPolicyType
 	fas.Spec.Policy.Buffer = nil
 	path := "scale"
-	fas.Spec.Policy.Webhook = &autoscalingv1.URLConfiguration{
+	fas.Spec.Policy.Webhook = &pluginsv1.URLConfiguration{
 		Service: &admregv1.ServiceReference{
 			Name:      svc.ObjectMeta.Name,
 			Namespace: framework.Namespace,
@@ -1994,102 +1995,9 @@ func TestWasmAutoScaler(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Shared setup: Get the path to the WASM plugin file and ensure it exists
-	wasmFilePath := filepath.Join("..", "..", "examples", "autoscaler-wasm", "plugin.wasm")
-	_, err := os.Stat(wasmFilePath)
-	require.NoError(t, err, "WASM plugin file does not exist at %s", wasmFilePath)
-
-	// Shared setup: Create a single nginx pod to serve the WASM plugin
-	emptyDirSize := resource.MustParse("50Mi") // 50Mi ~= 50MB
-	var port int32 = 80
-	path := "/plugin.wasm"
-
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "wasm-server-",
-			Namespace:    framework.Namespace,
-			Labels: map[string]string{
-				"app": "wasm-server",
-			},
-		},
-		Spec: corev1.PodSpec{
-			Volumes: []corev1.Volume{
-				{
-					Name: "ephemeral",
-					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &emptyDirSize},
-					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "nginx",
-					Image: "nginx:alpine",
-					Ports: []corev1.ContainerPort{{
-						ContainerPort: port,
-						Name:          "http",
-					}},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "ephemeral",
-							MountPath: "/usr/share/nginx/html",
-						},
-					},
-				},
-			},
-		},
-	}
-	podClient := framework.KubeClient.CoreV1().Pods(framework.Namespace)
-	pod, err = podClient.Create(ctx, pod, metav1.CreateOptions{})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = podClient.Delete(context.Background(), pod.ObjectMeta.Name, metav1.DeleteOptions{}) })
-
-	// Wait until the Pod is Running
-	require.NoError(t, wait.PollUntilContextTimeout(ctx, time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
-		p, err := podClient.Get(ctx, pod.ObjectMeta.Name, metav1.GetOptions{})
-		if err != nil {
-			return false, nil
-		}
-		return p.Status.Phase == corev1.PodRunning, nil
-	}))
-
-	// Copy the WASM plugin file to the nginx container once
-	err = copyFileToContainer(t, framework.Namespace, pod.ObjectMeta.Name, "nginx", wasmFilePath, "/usr/share/nginx/html/plugin.wasm")
-	require.NoError(t, err, "Failed to copy WASM plugin file to container")
-
-	// Compute correct and incorrect SHA256 hashes for the served WASM
-	pluginBytes, err := os.ReadFile(wasmFilePath)
-	require.NoError(t, err)
-	sum := sha256.Sum256(pluginBytes)
-	hashStr := hex.EncodeToString(sum[:])
-	badSum := make([]byte, len(sum))
-	copy(badSum, sum[:])
-	badSum[0] ^= 0xFF
-	badHash := hex.EncodeToString(badSum)
-
-	// Shared setup: Create a service to expose the pod
-	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "wasm-server-",
-			Namespace:    framework.Namespace,
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{
-				"app": "wasm-server",
-			},
-			Ports: []corev1.ServicePort{{
-				Port:       port,
-				TargetPort: intstr.FromInt32(port),
-				Protocol:   corev1.ProtocolTCP,
-			}},
-		},
-	}
-	serviceClient := framework.KubeClient.CoreV1().Services(framework.Namespace)
-	service, err = serviceClient.Create(ctx, service, metav1.CreateOptions{})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = serviceClient.Delete(context.Background(), service.ObjectMeta.Name, metav1.DeleteOptions{})
-	})
+	// Shared setup: a single nginx pod and service to serve the WASM plugin
+	server := createWasmServer(ctx, t, filepath.Join("..", "..", "examples", "autoscaler-wasm", "plugin.wasm"))
+	service, port, path, hashStr, badHash := server.service, server.port, server.path, server.hash, server.badHash
 
 	testCases := map[string]struct {
 		bufferSizeConfig     *int
@@ -2146,11 +2054,11 @@ func TestWasmAutoScaler(t *testing.T) {
 					FleetName: flt.ObjectMeta.Name,
 					Policy: autoscalingv1.FleetAutoscalerPolicy{
 						Type: autoscalingv1.WasmPolicyType,
-						Wasm: &autoscalingv1.WasmPolicy{
+						Wasm: &pluginsv1.WasmPolicy{
 							Function: "scale",
 							Config:   make(map[string]string),
-							From: autoscalingv1.WasmFrom{
-								URL: &autoscalingv1.URLConfiguration{
+							From: pluginsv1.WasmFrom{
+								URL: &pluginsv1.URLConfiguration{
 									Service: &admregv1.ServiceReference{
 										Namespace: framework.Namespace,
 										Name:      service.ObjectMeta.Name,
@@ -2374,4 +2282,120 @@ func copyFileToContainer(t *testing.T, namespace, podName, containerName, srcPat
 	}
 	t.Logf("Successfully copied %s to %s/%s:%s", srcPath, namespace, podName, destPath)
 	return nil
+}
+
+// wasmServer is a Service in the cluster that serves a WASM plugin file.
+type wasmServer struct {
+	service *corev1.Service
+	// path is the path the WASM plugin is served on.
+	path string
+	// hash is the sha256 hash of the WASM plugin.
+	hash string
+	// badHash is a sha256 hash that does not match the WASM plugin.
+	badHash string
+	port    int32
+}
+
+// createWasmServer creates a nginx Pod and Service that serves the WASM plugin file at wasmFilePath.
+// Both are deleted when the test completes.
+func createWasmServer(ctx context.Context, t *testing.T, wasmFilePath string) wasmServer {
+	t.Helper()
+
+	// Ensure the WASM plugin file exists
+	_, err := os.Stat(wasmFilePath)
+	require.NoError(t, err, "WASM plugin file does not exist at %s", wasmFilePath)
+
+	// Create a single nginx pod to serve the WASM plugin
+	emptyDirSize := resource.MustParse("50Mi") // 50Mi ~= 50MB
+	var port int32 = 80
+	path := "/plugin.wasm"
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "wasm-server-",
+			Namespace:    framework.Namespace,
+			Labels: map[string]string{
+				"app": "wasm-server",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Volumes: []corev1.Volume{
+				{
+					Name: "ephemeral",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &emptyDirSize},
+					},
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:  "nginx",
+					Image: "nginx:alpine",
+					Ports: []corev1.ContainerPort{{
+						ContainerPort: port,
+						Name:          "http",
+					}},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "ephemeral",
+							MountPath: "/usr/share/nginx/html",
+						},
+					},
+				},
+			},
+		},
+	}
+	podClient := framework.KubeClient.CoreV1().Pods(framework.Namespace)
+	pod, err = podClient.Create(ctx, pod, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = podClient.Delete(context.Background(), pod.ObjectMeta.Name, metav1.DeleteOptions{}) })
+
+	// Wait until the Pod is Running
+	require.NoError(t, wait.PollUntilContextTimeout(ctx, time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		p, err := podClient.Get(ctx, pod.ObjectMeta.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		return p.Status.Phase == corev1.PodRunning, nil
+	}))
+
+	// Copy the WASM plugin file to the nginx container once
+	err = copyFileToContainer(t, framework.Namespace, pod.ObjectMeta.Name, "nginx", wasmFilePath, "/usr/share/nginx/html/plugin.wasm")
+	require.NoError(t, err, "Failed to copy WASM plugin file to container")
+
+	// Compute correct and incorrect SHA256 hashes for the served WASM
+	pluginBytes, err := os.ReadFile(wasmFilePath)
+	require.NoError(t, err)
+	sum := sha256.Sum256(pluginBytes)
+	hashStr := hex.EncodeToString(sum[:])
+	badSum := make([]byte, len(sum))
+	copy(badSum, sum[:])
+	badSum[0] ^= 0xFF
+	badHash := hex.EncodeToString(badSum)
+
+	// Create a service to expose the pod
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "wasm-server-",
+			Namespace:    framework.Namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app": "wasm-server",
+			},
+			Ports: []corev1.ServicePort{{
+				Port:       port,
+				TargetPort: intstr.FromInt32(port),
+				Protocol:   corev1.ProtocolTCP,
+			}},
+		},
+	}
+	serviceClient := framework.KubeClient.CoreV1().Services(framework.Namespace)
+	service, err = serviceClient.Create(ctx, service, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = serviceClient.Delete(context.Background(), service.ObjectMeta.Name, metav1.DeleteOptions{})
+	})
+
+	return wasmServer{service: service, path: path, hash: hashStr, badHash: badHash, port: port}
 }

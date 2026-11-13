@@ -18,6 +18,9 @@ description="Detailed list of Agones Custom Resource Definitions available"
 <li>
 <a href="#multicluster.agones.dev%2fv1">multicluster.agones.dev/v1</a>
 </li>
+<li>
+<a href="#plugins.agones.dev%2fv1">plugins.agones.dev/v1</a>
+</li>
 </ul>
 <h2 id="agones.dev/v1">agones.dev/v1</h2>
 <p>
@@ -4005,7 +4008,7 @@ BufferPolicy
 <td>
 <code>webhook</code><br/>
 <em>
-<a href="#autoscaling.agones.dev/v1.URLConfiguration">
+<a href="#plugins.agones.dev/v1.URLConfiguration">
 URLConfiguration
 </a>
 </em>
@@ -4083,14 +4086,16 @@ Chain policy config params. Present only if FleetAutoscalerPolicyType = Chain.</
 <td>
 <code>wasm</code><br/>
 <em>
-<a href="#autoscaling.agones.dev/v1.WasmPolicy">
+<a href="#plugins.agones.dev/v1.WasmPolicy">
 WasmPolicy
 </a>
 </em>
 </td>
 <td>
 <em>(Optional)</em>
-<p>Wasm policy config params. Present only if FleetAutoscalerPolicyType = Wasm.</p>
+<p>[Stage:Alpha]
+[FeatureFlag:WasmAutoscaler]
+Wasm policy config params. Present only if FleetAutoscalerPolicyType = Wasm.</p>
 </td>
 </tr>
 </tbody>
@@ -4492,188 +4497,6 @@ FleetAutoscalerPolicy
 </tr>
 </tbody>
 </table>
-<h3 id="autoscaling.agones.dev/v1.URLConfiguration">URLConfiguration
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#autoscaling.agones.dev/v1.FleetAutoscalerPolicy">FleetAutoscalerPolicy</a>, 
-<a href="#autoscaling.agones.dev/v1.WasmFrom">WasmFrom</a>)
-</p>
-<p>
-<p>URLConfiguration is a generic configuration for any integration with an external URL or
-cluster provided service. For example, it can be used to configure a webhook or Wasm module</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>url</code><br/>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p><code>url</code> gives the location of the webhook, in standard URL form
-(<code>scheme://host:port/path</code>). Exactly one of <code>url</code> or <code>service</code>
-must be specified.</p>
-<p>The <code>host</code> should not refer to a service running in the cluster; use
-the <code>service</code> field instead. The host might be resolved via external
-DNS in some apiservers (e.g., <code>kube-apiserver</code> cannot resolve
-in-cluster DNS as that would be a layering violation). <code>host</code> may
-also be an IP address.</p>
-<p>Please note that using <code>localhost</code> or <code>127.0.0.1</code> as a <code>host</code> is
-risky unless you take great care to run this webhook on all hosts
-which run an apiserver which might need to make calls to this
-webhook. Such installs are likely to be non-portable, i.e., not easy
-to turn up in a new cluster.</p>
-<p>The scheme must be &ldquo;https&rdquo;; the URL must begin with &ldquo;https://&rdquo;.</p>
-<p>A path is optional, and if present may be any string permissible in
-a URL. You may use the path to pass an arbitrary string to the
-webhook, for example, a cluster identifier.</p>
-<p>Attempting to use a user or basic auth e.g. &ldquo;user:password@&rdquo; is not
-allowed. Fragments (&ldquo;#&hellip;&rdquo;) and query parameters (&ldquo;?&hellip;&rdquo;) are not
-allowed, either.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>service</code><br/>
-<em>
-<a href="https://v1-35.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#servicereference-v1-admissionregistration">
-Kubernetes admissionregistration/v1.ServiceReference
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p><code>service</code> is a reference to the service for this webhook. Either
-<code>service</code> or <code>url</code> must be specified.</p>
-<p>If the webhook is running within the cluster, then you should use <code>service</code>.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>caBundle</code><br/>
-<em>
-[]byte
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p><code>caBundle</code> is a PEM encoded CA bundle which will be used to validate the webhook&rsquo;s server certificate.
-If unspecified, system trust roots on the apiserver are used.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="autoscaling.agones.dev/v1.WasmFrom">WasmFrom
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#autoscaling.agones.dev/v1.WasmPolicy">WasmPolicy</a>)
-</p>
-<p>
-<p>WasmFrom defines the source of the Wasm module</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>url</code><br/>
-<em>
-<a href="#autoscaling.agones.dev/v1.URLConfiguration">
-URLConfiguration
-</a>
-</em>
-</td>
-<td>
-<p>URL is the URL of the Wasm module to use for autoscaling.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="autoscaling.agones.dev/v1.WasmPolicy">WasmPolicy
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#autoscaling.agones.dev/v1.FleetAutoscalerPolicy">FleetAutoscalerPolicy</a>)
-</p>
-<p>
-<p>WasmPolicy controls the desired behavior of the Wasm policy.
-It contains the configuration for the WebAssembly module used for autoscaling.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>function</code><br/>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Function is the exported function to call in the wasm module, defaults to &lsquo;scale&rsquo;</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>config</code><br/>
-<em>
-map[string]string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Config values to pass to the wasm program on startup</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>from</code><br/>
-<em>
-<a href="#autoscaling.agones.dev/v1.WasmFrom">
-WasmFrom
-</a>
-</em>
-</td>
-<td>
-<p>WasmFrom defines the source of the Wasm module</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>hash</code><br/>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Hash of the Wasm module, used to verify the integrity of the module</p>
-</td>
-</tr>
-</tbody>
-</table>
 <hr/>
 <h2 id="multicluster.agones.dev/v1">multicluster.agones.dev/v1</h2>
 <p>
@@ -4964,6 +4787,196 @@ ClusterConnectionInfo
 </tbody>
 </table>
 <hr/>
+<h2 id="plugins.agones.dev/v1">plugins.agones.dev/v1</h2>
+<p>
+<p>Package v1 contains shared types for configuring plugins, such as Wasm modules and the URLs they are
+loaded from. These types are used as fields within other Agones resources, and this group does not
+define any resources itself.</p>
+</p>
+Resource Types:
+<ul></ul>
+<h3 id="plugins.agones.dev/v1.URLConfiguration">URLConfiguration
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#autoscaling.agones.dev/v1.FleetAutoscalerPolicy">FleetAutoscalerPolicy</a>, 
+<a href="#plugins.agones.dev/v1.WasmFrom">WasmFrom</a>)
+</p>
+<p>
+<p>URLConfiguration is a generic configuration for any integration with an external URL or
+cluster provided service. For example, it can be used to configure a webhook or Wasm module</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>url</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p><code>url</code> gives the location of the webhook, in standard URL form
+(<code>scheme://host:port/path</code>). Exactly one of <code>url</code> or <code>service</code>
+must be specified.</p>
+<p>The <code>host</code> should not refer to a service running in the cluster; use
+the <code>service</code> field instead. The host might be resolved via external
+DNS in some apiservers (e.g., <code>kube-apiserver</code> cannot resolve
+in-cluster DNS as that would be a layering violation). <code>host</code> may
+also be an IP address.</p>
+<p>Please note that using <code>localhost</code> or <code>127.0.0.1</code> as a <code>host</code> is
+risky unless you take great care to run this webhook on all hosts
+which run an apiserver which might need to make calls to this
+webhook. Such installs are likely to be non-portable, i.e., not easy
+to turn up in a new cluster.</p>
+<p>The scheme must be &ldquo;https&rdquo;; the URL must begin with &ldquo;https://&rdquo;.</p>
+<p>A path is optional, and if present may be any string permissible in
+a URL. You may use the path to pass an arbitrary string to the
+webhook, for example, a cluster identifier.</p>
+<p>Attempting to use a user or basic auth e.g. &ldquo;user:password@&rdquo; is not
+allowed. Fragments (&ldquo;#&hellip;&rdquo;) and query parameters (&ldquo;?&hellip;&rdquo;) are not
+allowed, either.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>service</code><br/>
+<em>
+<a href="https://v1-35.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#servicereference-v1-admissionregistration">
+Kubernetes admissionregistration/v1.ServiceReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p><code>service</code> is a reference to the service for this webhook. Either
+<code>service</code> or <code>url</code> must be specified.</p>
+<p>If the webhook is running within the cluster, then you should use <code>service</code>.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>caBundle</code><br/>
+<em>
+[]byte
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p><code>caBundle</code> is a PEM encoded CA bundle which will be used to validate the webhook&rsquo;s server certificate.
+If unspecified, system trust roots on the apiserver are used.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="plugins.agones.dev/v1.WasmFrom">WasmFrom
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#plugins.agones.dev/v1.WasmPolicy">WasmPolicy</a>)
+</p>
+<p>
+<p>WasmFrom defines the source of the Wasm module</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>url</code><br/>
+<em>
+<a href="#plugins.agones.dev/v1.URLConfiguration">
+URLConfiguration
+</a>
+</em>
+</td>
+<td>
+<p>URL is the URL of the Wasm module.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="plugins.agones.dev/v1.WasmPolicy">WasmPolicy
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#autoscaling.agones.dev/v1.FleetAutoscalerPolicy">FleetAutoscalerPolicy</a>)
+</p>
+<p>
+<p>WasmPolicy contains the configuration for a WebAssembly module that runs as a plugin to Agones.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>function</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Function is the exported function to call in the wasm module. The default depends on where the plugin is used.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>config</code><br/>
+<em>
+map[string]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Config values to pass to the wasm program on startup</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>from</code><br/>
+<em>
+<a href="#plugins.agones.dev/v1.WasmFrom">
+WasmFrom
+</a>
+</em>
+</td>
+<td>
+<p>WasmFrom defines the source of the Wasm module</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>hash</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Hash of the Wasm module, used to verify the integrity of the module</p>
+</td>
+</tr>
+</tbody>
+</table>
+<hr/>
 <p><em>
 Generated with <code>gen-crd-api-reference-docs</code>.
 </em></p>
@@ -4982,6 +4995,9 @@ Generated with <code>gen-crd-api-reference-docs</code>.
 </li>
 <li>
 <a href="#multicluster.agones.dev%2fv1">multicluster.agones.dev/v1</a>
+</li>
+<li>
+<a href="#plugins.agones.dev%2fv1">plugins.agones.dev/v1</a>
 </li>
 </ul>
 <h2 id="agones.dev/v1">agones.dev/v1</h2>
@@ -7311,6 +7327,24 @@ map[string]agones.dev/agones/pkg/apis/allocation/v1.ListAction
 List actions to perform during allocation.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>wasm</code><br/>
+<em>
+<a href="#plugins.agones.dev/v1.WasmPolicy">
+WasmPolicy
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>[Stage:Alpha]
+[FeatureFlag:WasmAllocation]
+Wasm is a Wasm plugin that is run against the selected GameServer during allocation.
+The plugin function is passed the GameServer as JSON, and returns the GameServer as JSON
+with any changes that should be applied as part of the allocation.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -7606,6 +7640,24 @@ map[string]agones.dev/agones/pkg/apis/allocation/v1.ListAction
 <p>[Stage: Beta]
 [FeatureFlag:CountsAndLists]
 List actions to perform during allocation.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>wasm</code><br/>
+<em>
+<a href="#plugins.agones.dev/v1.WasmPolicy">
+WasmPolicy
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>[Stage:Alpha]
+[FeatureFlag:WasmAllocation]
+Wasm is a Wasm plugin that is run against the selected GameServer during allocation.
+The plugin function is passed the GameServer as JSON, and returns the GameServer as JSON
+with any changes that should be applied as part of the allocation.</p>
 </td>
 </tr>
 </tbody>
@@ -8763,7 +8815,7 @@ BufferPolicy
 <td>
 <code>webhook</code><br/>
 <em>
-<a href="#autoscaling.agones.dev/v1.URLConfiguration">
+<a href="#plugins.agones.dev/v1.URLConfiguration">
 URLConfiguration
 </a>
 </em>
@@ -8841,14 +8893,16 @@ Chain policy config params. Present only if FleetAutoscalerPolicyType = Chain.</
 <td>
 <code>wasm</code><br/>
 <em>
-<a href="#autoscaling.agones.dev/v1.WasmPolicy">
+<a href="#plugins.agones.dev/v1.WasmPolicy">
 WasmPolicy
 </a>
 </em>
 </td>
 <td>
 <em>(Optional)</em>
-<p>Wasm policy config params. Present only if FleetAutoscalerPolicyType = Wasm.</p>
+<p>[Stage:Alpha]
+[FeatureFlag:WasmAutoscaler]
+Wasm policy config params. Present only if FleetAutoscalerPolicyType = Wasm.</p>
 </td>
 </tr>
 </tbody>
@@ -9250,188 +9304,6 @@ FleetAutoscalerPolicy
 </tr>
 </tbody>
 </table>
-<h3 id="autoscaling.agones.dev/v1.URLConfiguration">URLConfiguration
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#autoscaling.agones.dev/v1.FleetAutoscalerPolicy">FleetAutoscalerPolicy</a>, 
-<a href="#autoscaling.agones.dev/v1.WasmFrom">WasmFrom</a>)
-</p>
-<p>
-<p>URLConfiguration is a generic configuration for any integration with an external URL or
-cluster provided service. For example, it can be used to configure a webhook or Wasm module</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>url</code><br/>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p><code>url</code> gives the location of the webhook, in standard URL form
-(<code>scheme://host:port/path</code>). Exactly one of <code>url</code> or <code>service</code>
-must be specified.</p>
-<p>The <code>host</code> should not refer to a service running in the cluster; use
-the <code>service</code> field instead. The host might be resolved via external
-DNS in some apiservers (e.g., <code>kube-apiserver</code> cannot resolve
-in-cluster DNS as that would be a layering violation). <code>host</code> may
-also be an IP address.</p>
-<p>Please note that using <code>localhost</code> or <code>127.0.0.1</code> as a <code>host</code> is
-risky unless you take great care to run this webhook on all hosts
-which run an apiserver which might need to make calls to this
-webhook. Such installs are likely to be non-portable, i.e., not easy
-to turn up in a new cluster.</p>
-<p>The scheme must be &ldquo;https&rdquo;; the URL must begin with &ldquo;https://&rdquo;.</p>
-<p>A path is optional, and if present may be any string permissible in
-a URL. You may use the path to pass an arbitrary string to the
-webhook, for example, a cluster identifier.</p>
-<p>Attempting to use a user or basic auth e.g. &ldquo;user:password@&rdquo; is not
-allowed. Fragments (&ldquo;#&hellip;&rdquo;) and query parameters (&ldquo;?&hellip;&rdquo;) are not
-allowed, either.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>service</code><br/>
-<em>
-<a href="https://v1-35.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#servicereference-v1-admissionregistration">
-Kubernetes admissionregistration/v1.ServiceReference
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p><code>service</code> is a reference to the service for this webhook. Either
-<code>service</code> or <code>url</code> must be specified.</p>
-<p>If the webhook is running within the cluster, then you should use <code>service</code>.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>caBundle</code><br/>
-<em>
-[]byte
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p><code>caBundle</code> is a PEM encoded CA bundle which will be used to validate the webhook&rsquo;s server certificate.
-If unspecified, system trust roots on the apiserver are used.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="autoscaling.agones.dev/v1.WasmFrom">WasmFrom
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#autoscaling.agones.dev/v1.WasmPolicy">WasmPolicy</a>)
-</p>
-<p>
-<p>WasmFrom defines the source of the Wasm module</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>url</code><br/>
-<em>
-<a href="#autoscaling.agones.dev/v1.URLConfiguration">
-URLConfiguration
-</a>
-</em>
-</td>
-<td>
-<p>URL is the URL of the Wasm module to use for autoscaling.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="autoscaling.agones.dev/v1.WasmPolicy">WasmPolicy
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#autoscaling.agones.dev/v1.FleetAutoscalerPolicy">FleetAutoscalerPolicy</a>)
-</p>
-<p>
-<p>WasmPolicy controls the desired behavior of the Wasm policy.
-It contains the configuration for the WebAssembly module used for autoscaling.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>function</code><br/>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Function is the exported function to call in the wasm module, defaults to &lsquo;scale&rsquo;</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>config</code><br/>
-<em>
-map[string]string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Config values to pass to the wasm program on startup</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>from</code><br/>
-<em>
-<a href="#autoscaling.agones.dev/v1.WasmFrom">
-WasmFrom
-</a>
-</em>
-</td>
-<td>
-<p>WasmFrom defines the source of the Wasm module</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>hash</code><br/>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Hash of the Wasm module, used to verify the integrity of the module</p>
-</td>
-</tr>
-</tbody>
-</table>
 <hr/>
 <h2 id="multicluster.agones.dev/v1">multicluster.agones.dev/v1</h2>
 <p>
@@ -9717,6 +9589,197 @@ ClusterConnectionInfo
 </em>
 </td>
 <td>
+</td>
+</tr>
+</tbody>
+</table>
+<hr/>
+<h2 id="plugins.agones.dev/v1">plugins.agones.dev/v1</h2>
+<p>
+<p>Package v1 contains shared types for configuring plugins, such as Wasm modules and the URLs they are
+loaded from. These types are used as fields within other Agones resources, and this group does not
+define any resources itself.</p>
+</p>
+Resource Types:
+<ul></ul>
+<h3 id="plugins.agones.dev/v1.URLConfiguration">URLConfiguration
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#autoscaling.agones.dev/v1.FleetAutoscalerPolicy">FleetAutoscalerPolicy</a>, 
+<a href="#plugins.agones.dev/v1.WasmFrom">WasmFrom</a>)
+</p>
+<p>
+<p>URLConfiguration is a generic configuration for any integration with an external URL or
+cluster provided service. For example, it can be used to configure a webhook or Wasm module</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>url</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p><code>url</code> gives the location of the webhook, in standard URL form
+(<code>scheme://host:port/path</code>). Exactly one of <code>url</code> or <code>service</code>
+must be specified.</p>
+<p>The <code>host</code> should not refer to a service running in the cluster; use
+the <code>service</code> field instead. The host might be resolved via external
+DNS in some apiservers (e.g., <code>kube-apiserver</code> cannot resolve
+in-cluster DNS as that would be a layering violation). <code>host</code> may
+also be an IP address.</p>
+<p>Please note that using <code>localhost</code> or <code>127.0.0.1</code> as a <code>host</code> is
+risky unless you take great care to run this webhook on all hosts
+which run an apiserver which might need to make calls to this
+webhook. Such installs are likely to be non-portable, i.e., not easy
+to turn up in a new cluster.</p>
+<p>The scheme must be &ldquo;https&rdquo;; the URL must begin with &ldquo;https://&rdquo;.</p>
+<p>A path is optional, and if present may be any string permissible in
+a URL. You may use the path to pass an arbitrary string to the
+webhook, for example, a cluster identifier.</p>
+<p>Attempting to use a user or basic auth e.g. &ldquo;user:password@&rdquo; is not
+allowed. Fragments (&ldquo;#&hellip;&rdquo;) and query parameters (&ldquo;?&hellip;&rdquo;) are not
+allowed, either.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>service</code><br/>
+<em>
+<a href="https://v1-35.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#servicereference-v1-admissionregistration">
+Kubernetes admissionregistration/v1.ServiceReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p><code>service</code> is a reference to the service for this webhook. Either
+<code>service</code> or <code>url</code> must be specified.</p>
+<p>If the webhook is running within the cluster, then you should use <code>service</code>.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>caBundle</code><br/>
+<em>
+[]byte
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p><code>caBundle</code> is a PEM encoded CA bundle which will be used to validate the webhook&rsquo;s server certificate.
+If unspecified, system trust roots on the apiserver are used.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="plugins.agones.dev/v1.WasmFrom">WasmFrom
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#plugins.agones.dev/v1.WasmPolicy">WasmPolicy</a>)
+</p>
+<p>
+<p>WasmFrom defines the source of the Wasm module</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>url</code><br/>
+<em>
+<a href="#plugins.agones.dev/v1.URLConfiguration">
+URLConfiguration
+</a>
+</em>
+</td>
+<td>
+<p>URL is the URL of the Wasm module.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="plugins.agones.dev/v1.WasmPolicy">WasmPolicy
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#allocation.agones.dev/v1.GameServerAllocationSpec">GameServerAllocationSpec</a>, 
+<a href="#autoscaling.agones.dev/v1.FleetAutoscalerPolicy">FleetAutoscalerPolicy</a>)
+</p>
+<p>
+<p>WasmPolicy contains the configuration for a WebAssembly module that runs as a plugin to Agones.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>function</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Function is the exported function to call in the wasm module. The default depends on where the plugin is used.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>config</code><br/>
+<em>
+map[string]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Config values to pass to the wasm program on startup</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>from</code><br/>
+<em>
+<a href="#plugins.agones.dev/v1.WasmFrom">
+WasmFrom
+</a>
+</em>
+</td>
+<td>
+<p>WasmFrom defines the source of the Wasm module</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>hash</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Hash of the Wasm module, used to verify the integrity of the module</p>
 </td>
 </tr>
 </tbody>

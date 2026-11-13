@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -589,5 +590,69 @@ func TestAllocatorCrossNamespace(t *testing.T) {
 		response, err := grpcClient.Allocate(ctx, request)
 		require.NoError(c, err, "failing Allocate request")
 		helper.ValidateAllocatorResponse(t, response)
+	}, 5*time.Minute, 2*time.Second)
+}
+
+func TestAllocatorWithWasm(t *testing.T) {
+	if !runtime.FeatureEnabled(runtime.FeatureWasmAllocation) {
+		t.SkipNow()
+	}
+	ctx := context.Background()
+	listName := "freeSessions"
+	sessions := []string{"session-1", "session-2", "session-3"}
+
+	ip, port := helper.GetAllocatorEndpoint(ctx, t, framework)
+	requestURL := fmt.Sprintf(allocatorReqURLFmt, ip, port)
+	tlsCA := helper.RefreshAllocatorTLSCerts(ctx, t, ip, framework)
+
+	server := createWasmServer(ctx, t, filepath.Join("..", "..", "examples", "allocation-wasm", "plugin.wasm"))
+
+	flt, err := helper.CreateFleetWithOpts(ctx, framework.Namespace, framework, func(f *agonesv1.Fleet) {
+		f.Spec.Template.Spec.Lists = map[string]agonesv1.ListStatus{
+			listName: {Values: sessions, Capacity: int64(len(sessions))},
+		}
+	})
+	require.NoError(t, err)
+	defer framework.AgonesClient.AgonesV1().Fleets(framework.Namespace).Delete(ctx, flt.Name, metav1.DeleteOptions{}) //nolint:errcheck
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(flt.Spec.Replicas))
+
+	request := &pb.AllocationRequest{
+		Namespace: framework.Namespace,
+		GameServerSelectors: []*pb.GameServerSelector{{
+			MatchLabels: map[string]string{agonesv1.FleetNameLabel: flt.ObjectMeta.Name},
+		}},
+		Wasm: &pb.WasmPolicy{
+			Config: map[string]string{"list": listName},
+			From: &pb.WasmFrom{Url: &pb.URLConfiguration{
+				Service: &pb.URLConfiguration_ServiceReference{
+					Namespace: server.service.ObjectMeta.Namespace,
+					Name:      server.service.ObjectMeta.Name,
+					Path:      wrapperspb.String(server.path),
+					Port:      wrapperspb.Int32(server.port),
+				},
+			}},
+			Hash: server.hash,
+		},
+	}
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		dialOpts, err := helper.CreateRemoteClusterDialOptions(ctx, allocatorClientSecretNamespace, allocatorClientSecretName, tlsCA, framework)
+		require.NoError(c, err)
+
+		conn, err := grpc.NewClient(requestURL, dialOpts...)
+		require.NoError(c, err, "failing grpc.NewClient")
+		defer conn.Close() //nolint:errcheck
+
+		grpcClient := pb.NewAllocationServiceClient(conn)
+		response, err := grpcClient.Allocate(ctx, request)
+		require.NoError(c, err, "failing Allocate request")
+		helper.ValidateAllocatorResponse(t, response)
+		// the session that the plugin allocated is returned, and it is no longer in the list.
+		session := response.GetMetadata().GetAnnotations()["session"]
+		require.Contains(c, sessions, session)
+		require.NotContains(c, response.GetLists()[listName].GetValues(), session)
+		require.Len(c, response.GetLists()[listName].GetValues(), len(sessions)-1)
 	}, 5*time.Minute, 2*time.Second)
 }

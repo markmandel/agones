@@ -96,6 +96,7 @@ const (
 	logLevelFlag                     = "log-level"
 	allocationBatchWaitTime          = "allocation-batch-wait-time"
 	maxListItemsFlag                 = "max-list-items"
+	wasmCacheSizeFlag                = "wasm-cache-size"
 	readinessShutdownDuration        = "readiness-shutdown-duration"
 	httpUnallocatedStatusCode        = "http-unallocated-status-code"
 	processorGRPCAddress             = "processor-grpc-address"
@@ -119,6 +120,7 @@ func parseEnvFlags() config {
 	viper.SetDefault(logLevelFlag, "Info")
 	viper.SetDefault(allocationBatchWaitTime, 500*time.Millisecond)
 	viper.SetDefault(maxListItemsFlag, 1000)
+	viper.SetDefault(wasmCacheSizeFlag, 10)
 	viper.SetDefault(httpUnallocatedStatusCode, http.StatusTooManyRequests)
 	viper.SetDefault(processorGRPCAddress, "agones-processor.agones-system.svc.cluster.local")
 	viper.SetDefault(processorGRPCPort, 9090)
@@ -139,6 +141,7 @@ func parseEnvFlags() config {
 	pflag.String(logLevelFlag, viper.GetString(logLevelFlag), "Agones Log level")
 	pflag.Duration(allocationBatchWaitTime, viper.GetDuration(allocationBatchWaitTime), "Flag to configure the waiting period between allocations batches")
 	pflag.Int64(maxListItemsFlag, viper.GetInt64(maxListItemsFlag), "Flag to set the maximum Capacity a GameServer List may be set to during allocation. Can also use MAX_LIST_ITEMS env variable")
+	pflag.Int(wasmCacheSizeFlag, viper.GetInt(wasmCacheSizeFlag), "Flag to set the maximum number of compiled Wasm modules that are cached for allocation. Can also use WASM_CACHE_SIZE env variable.")
 	pflag.Duration(readinessShutdownDuration, viper.GetDuration(readinessShutdownDuration), "Time in seconds for SIGTERM/SIGINT handler to sleep for.")
 	pflag.Int32(httpUnallocatedStatusCode, viper.GetInt32(httpUnallocatedStatusCode), "HTTP status code to return when no GameServer is available")
 	pflag.String(processorGRPCAddress, viper.GetString(processorGRPCAddress), "The gRPC address of the Agones Processor service")
@@ -164,6 +167,7 @@ func parseEnvFlags() config {
 	runtime.Must(viper.BindEnv(logLevelFlag))
 	runtime.Must(viper.BindEnv(allocationBatchWaitTime))
 	runtime.Must(viper.BindEnv(maxListItemsFlag))
+	runtime.Must(viper.BindEnv(wasmCacheSizeFlag))
 	runtime.Must(viper.BindEnv(readinessShutdownDuration))
 	runtime.Must(viper.BindEnv(httpUnallocatedStatusCode))
 	runtime.Must(viper.BindPFlags(pflag.CommandLine))
@@ -187,6 +191,7 @@ func parseEnvFlags() config {
 		totalRemoteAllocationTimeout: viper.GetDuration(totalRemoteAllocationTimeoutFlag),
 		allocationBatchWaitTime:      viper.GetDuration(allocationBatchWaitTime),
 		maxListItems:                 viper.GetInt64(maxListItemsFlag),
+		wasmCacheSize:                viper.GetInt(wasmCacheSizeFlag),
 		ReadinessShutdownDuration:    viper.GetDuration(readinessShutdownDuration),
 		httpUnallocatedStatusCode:    int(viper.GetInt32(httpUnallocatedStatusCode)),
 		processorGRPCAddress:         viper.GetString(processorGRPCAddress),
@@ -211,6 +216,7 @@ type config struct {
 	remoteAllocationTimeout      time.Duration
 	allocationBatchWaitTime      time.Duration
 	maxListItems                 int64
+	wasmCacheSize                int
 	ReadinessShutdownDuration    time.Duration
 	httpUnallocatedStatusCode    int
 	processorGRPCAddress         string
@@ -240,6 +246,9 @@ func main() {
 
 	if conf.maxListItems <= 0 {
 		logger.Fatalf("%s must be greater than 0", maxListItemsFlag)
+	}
+	if conf.wasmCacheSize <= 0 {
+		logger.Fatalf("%s must be greater than 0", wasmCacheSizeFlag)
 	}
 
 	logger.WithField("logLevel", conf.LogLevel).Info("Setting LogLevel configuration")
@@ -328,7 +337,7 @@ func main() {
 		h = newProcessorServiceHandler(processorClient, conf.MTLSDisabled, conf.TLSDisabled)
 	} else {
 		grpcUnallocatedStatusCode := processor.GRPCCodeFromHTTPStatus(conf.httpUnallocatedStatusCode)
-		h = newServiceHandler(workerCtx, kubeClient, agonesClient, health, conf.MTLSDisabled, conf.TLSDisabled, conf.remoteAllocationTimeout, conf.totalRemoteAllocationTimeout, conf.allocationBatchWaitTime, grpcUnallocatedStatusCode, conf.maxListItems)
+		h = newServiceHandler(workerCtx, kubeClient, agonesClient, health, conf.MTLSDisabled, conf.TLSDisabled, conf.remoteAllocationTimeout, conf.totalRemoteAllocationTimeout, conf.allocationBatchWaitTime, grpcUnallocatedStatusCode, conf.maxListItems, conf.wasmCacheSize)
 	}
 
 	if !h.tlsDisabled {
@@ -525,7 +534,7 @@ func newProcessorServiceHandler(processorClient processor.Client, mTLSDisabled, 
 	return &h
 }
 
-func newServiceHandler(ctx context.Context, kubeClient kubernetes.Interface, agonesClient versioned.Interface, health healthcheck.Handler, mTLSDisabled bool, tlsDisabled bool, remoteAllocationTimeout time.Duration, totalRemoteAllocationTimeout time.Duration, allocationBatchWaitTime time.Duration, grpcUnallocatedStatusCode codes.Code, listMaxCapacity int64) *serviceHandler {
+func newServiceHandler(ctx context.Context, kubeClient kubernetes.Interface, agonesClient versioned.Interface, health healthcheck.Handler, mTLSDisabled bool, tlsDisabled bool, remoteAllocationTimeout time.Duration, totalRemoteAllocationTimeout time.Duration, allocationBatchWaitTime time.Duration, grpcUnallocatedStatusCode codes.Code, listMaxCapacity int64, wasmCacheSize int) *serviceHandler {
 	defaultResync := 30 * time.Second
 	agonesInformerFactory := externalversions.NewSharedInformerFactory(agonesClient, defaultResync)
 	kubeInformerFactory := informers.NewSharedInformerFactory(kubeClient, defaultResync)
@@ -540,7 +549,8 @@ func newServiceHandler(ctx context.Context, kubeClient kubernetes.Interface, ago
 		remoteAllocationTimeout,
 		totalRemoteAllocationTimeout,
 		allocationBatchWaitTime,
-		listMaxCapacity)
+		listMaxCapacity,
+		wasmCacheSize)
 
 	h := serviceHandler{
 		allocationCallback: func(allocationCtx context.Context, gsa *allocationv1.GameServerAllocation) (k8sruntime.Object, error) {

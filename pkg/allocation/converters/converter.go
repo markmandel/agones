@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	admregv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -26,6 +27,7 @@ import (
 	"agones.dev/agones/pkg/apis"
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	allocationv1 "agones.dev/agones/pkg/apis/allocation/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 )
 
 // ConvertAllocationRequestToGSA converts AllocationRequest to GameServerAllocation V1 (GSA)
@@ -83,6 +85,7 @@ func ConvertAllocationRequestToGSA(in *pb.AllocationRequest) *allocationv1.GameS
 	if in.Lists != nil {
 		gsa.Spec.Lists = convertAllocationListsToGSAListActions(in.GetLists())
 	}
+	gsa.Spec.Wasm = convertAllocationWasmToGSAWasmPolicy(in.GetWasm())
 
 	return gsa
 }
@@ -135,6 +138,84 @@ func ConvertGSAToAllocationRequest(in *allocationv1.GameServerAllocation) *pb.Al
 	}
 	if in.Spec.Lists != nil {
 		out.Lists = convertGSAListActionsToAllocationLists(in.Spec.Lists)
+	}
+	out.Wasm = convertGSAWasmPolicyToAllocationWasm(in.Spec.Wasm)
+
+	return out
+}
+
+// convertAllocationWasmToGSAWasmPolicy converts the AllocationRequest WasmPolicy to the GSA WasmPolicy
+func convertAllocationWasmToGSAWasmPolicy(in *pb.WasmPolicy) *pluginsv1.WasmPolicy {
+	if in == nil {
+		return nil
+	}
+
+	out := &pluginsv1.WasmPolicy{
+		Function: in.GetFunction(),
+		Config:   in.GetConfig(),
+		Hash:     in.GetHash(),
+	}
+
+	u := in.GetFrom().GetUrl()
+	if u == nil {
+		return out
+	}
+
+	out.From.URL = &pluginsv1.URLConfiguration{CABundle: u.GetCaBundle()}
+	if u.GetUrl() != nil {
+		url := u.GetUrl().GetValue()
+		out.From.URL.URL = &url
+	}
+	if svc := u.GetService(); svc != nil {
+		out.From.URL.Service = &admregv1.ServiceReference{
+			Namespace: svc.GetNamespace(),
+			Name:      svc.GetName(),
+		}
+		if svc.GetPath() != nil {
+			path := svc.GetPath().GetValue()
+			out.From.URL.Service.Path = &path
+		}
+		if svc.GetPort() != nil {
+			port := svc.GetPort().GetValue()
+			out.From.URL.Service.Port = &port
+		}
+	}
+
+	return out
+}
+
+// convertGSAWasmPolicyToAllocationWasm converts the GSA WasmPolicy to the AllocationRequest WasmPolicy
+func convertGSAWasmPolicyToAllocationWasm(in *pluginsv1.WasmPolicy) *pb.WasmPolicy {
+	if in == nil {
+		return nil
+	}
+
+	out := &pb.WasmPolicy{
+		Function: in.Function,
+		Config:   in.Config,
+		Hash:     in.Hash,
+	}
+
+	u := in.From.URL
+	if u == nil {
+		return out
+	}
+
+	out.From = &pb.WasmFrom{Url: &pb.URLConfiguration{CaBundle: u.CABundle}}
+	if u.URL != nil {
+		out.From.Url.Url = wrapperspb.String(*u.URL)
+	}
+	if u.Service != nil {
+		out.From.Url.Service = &pb.URLConfiguration_ServiceReference{
+			Namespace: u.Service.Namespace,
+			Name:      u.Service.Name,
+		}
+		if u.Service.Path != nil {
+			out.From.Url.Service.Path = wrapperspb.String(*u.Service.Path)
+		}
+		if u.Service.Port != nil {
+			out.From.Url.Service.Port = wrapperspb.Int32(*u.Service.Port)
+		}
 	}
 
 	return out

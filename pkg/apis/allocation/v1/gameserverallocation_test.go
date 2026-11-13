@@ -20,6 +20,7 @@ import (
 
 	"agones.dev/agones/pkg/apis"
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
+	pluginsv1 "agones.dev/agones/pkg/apis/plugins/v1"
 	"agones.dev/agones/pkg/util/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1381,4 +1382,51 @@ func TestSortKey(t *testing.T) {
 		})
 	}
 
+}
+
+func TestGameServerAllocationWasm(t *testing.T) {
+	runtime.FeatureTestMutex.Lock()
+	defer runtime.FeatureTestMutex.Unlock()
+
+	url := "http://example.com/plugin.wasm"
+	fixture := func() *GameServerAllocation {
+		gsa := &GameServerAllocation{Spec: GameServerAllocationSpec{
+			Wasm: &pluginsv1.WasmPolicy{From: pluginsv1.WasmFrom{URL: &pluginsv1.URLConfiguration{URL: &url}}},
+		}}
+		gsa.ApplyDefaults()
+		return gsa
+	}
+
+	require.NoError(t, runtime.ParseFeatures(string(runtime.FeatureWasmAllocation)+"=true"))
+
+	// the function is defaulted, but only when it is not set.
+	gsa := fixture()
+	assert.Equal(t, DefaultWasmFunction, gsa.Spec.Wasm.Function)
+	assert.Empty(t, gsa.Validate())
+
+	gsa.Spec.Wasm.Function = "other"
+	gsa.ApplyDefaults()
+	assert.Equal(t, "other", gsa.Spec.Wasm.Function)
+
+	// the wasm policy does not change the sort key.
+	withoutWasm := &GameServerAllocation{}
+	withoutWasm.ApplyDefaults()
+	expected, err := withoutWasm.SortKey()
+	require.NoError(t, err)
+	actual, err := gsa.SortKey()
+	require.NoError(t, err)
+	assert.Equal(t, expected, actual)
+
+	gsa = fixture()
+	gsa.Spec.Wasm.From.URL = nil
+	allErrs := gsa.Validate()
+	require.Len(t, allErrs, 1)
+	assert.Equal(t, field.ErrorTypeRequired, allErrs[0].Type)
+	assert.Equal(t, "spec.wasm.from", allErrs[0].Field)
+
+	require.NoError(t, runtime.ParseFeatures(string(runtime.FeatureWasmAllocation)+"=false"))
+	allErrs = fixture().Validate()
+	require.Len(t, allErrs, 1)
+	assert.Equal(t, field.ErrorTypeForbidden, allErrs[0].Type)
+	assert.Equal(t, "spec.wasm", allErrs[0].Field)
 }

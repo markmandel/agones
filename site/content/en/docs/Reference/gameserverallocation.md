@@ -103,6 +103,31 @@ spec:
         - alice
         - bob
   {{< /tab >}}
+  {{< tab header="wasm" lang="yaml" >}}
+apiVersion: "allocation.agones.dev/v1"
+kind: GameServerAllocation
+spec:
+  selectors:
+    - matchLabels:
+        agones.dev/fleet: simple-game-server
+  # [Stage:Alpha]
+  # [FeatureFlag:WasmAllocation]
+  # Wasm plugin to run against the selected GameServer as part of allocation. Optional.
+  # The plugin function is passed the GameServer as JSON, and returns the GameServer as JSON with
+  # any changes that should be applied as part of the allocation.
+  wasm:
+    # The exported function to call in the wasm module, defaults to 'allocate'
+    function: 'allocate'
+    # Config values to pass to the wasm program
+    config:
+      list: freeSessions
+    from:
+      url:
+        # use a service, or direct URL
+        url: "https://example.com/plugin.wasm"
+    # Optional sha256 hash of the wasm module, to verify its integrity (recommended)
+    hash: ""
+  {{< /tab >}}
   {{< tab header="required & preferred (deprecated)" lang="yaml" >}}
 apiVersion: "allocation.agones.dev/v1"
 kind: GameServerAllocation
@@ -187,6 +212,10 @@ The `spec` field is the actual `GameServerAllocation` specification, and it is c
 - `priorities` (Beta, requires `CountsAndLists` feature flag) alters the priority by which game `GameServers` are allocated by available capacity.
 - `counters` (Beta, "CountsAndLists" feature flag) Counter actions to perform during allocation.
 - `lists` (Beta, "CountsAndLists" feature flag) List actions to perform during allocation.
+{{% feature publishVersion="1.63.0" %}}
+- `wasm` (Alpha, "WasmAllocation" feature flag) a Wasm plugin to run against the selected `GameServer` as part of
+  allocation. See [Wasm Allocation](#wasm-allocation) below for more details. Optional.
+{{% /feature %}}
 
 Once created the `GameServerAllocation` will have a `status` field consisting of the following:
 
@@ -212,6 +241,54 @@ control plane, it may take some time for updates to `GameServer` selectable feat
 (although this doesn't affect the atomicity of the Allocation operation).
 
 {{% /alert %}}
+
+{{% feature publishVersion="1.63.0" %}}
+## Wasm Allocation
+
+{{< alpha title="Wasm Allocation" gate="WasmAllocation" >}}
+
+A Wasm plugin can be used to run custom logic against the `GameServer` that has been selected for allocation, as part of
+the same update that allocates it. For example, a `GameServer` that hosts multiple game sessions can use a plugin to
+choose which of its sessions to allocate, and to tell the caller which one it chose.
+
+Agones uses the [Extism](https://extism.org/) WebAssembly plugin framework to load and execute Wasm modules. Wasm
+modules are sandboxed, and can be written in any language that compiles to WebAssembly, such as Rust, Go, or C++.
+
+The Wasm module is loaded from either a `url`, or a `service` in the cluster, and runs within the Agones allocation
+process:
+
+- `function` is the exported function to call in the Wasm module. Defaults to `allocate`.
+- `config` is a map of config values that are passed to the Wasm module. Optional.
+- `from.url` is where the Wasm module is loaded from, as either a `url` or a `service`, and an optional `caBundle`.
+- `hash` is the sha256 hash of the Wasm module, used to verify its integrity. Optional, but recommended.
+
+The function is passed the selected `GameServer` as JSON, after the `metadata`, `counters` and `lists` changes in the
+`GameServerAllocation` have been applied to it, and must return the `GameServer` as JSON with any further changes it
+wants to make. The returned `GameServer` is what is saved, so the plugin should return the whole `GameServer` that
+it was passed, and not only the fields it changed.
+
+There are some limits to what the plugin can change:
+
+- The `GameServer` is always `Allocated`. Any change to its state is ignored.
+- The `name`, `namespace`, `uid`, `resourceVersion`, `generation` and creation and deletion details of the `GameServer`
+  cannot be changed, so it is always the same `GameServer` that was selected for allocation.
+
+If the Wasm module cannot be loaded, its hash does not match, the function fails, or it does not return a valid
+`GameServer`, then the allocation fails with an error, and the `GameServer` is not changed.
+
+Since the allocation and the changes from the plugin are applied to the `GameServer` in a single update, they happen
+together or not at all. Any information the caller needs from the plugin, such as which session was allocated, can be
+stored in the `GameServer` labels or annotations, as these are returned in the `GameServerAllocation` `status`.
+
+Wasm modules are cached in memory once they have been loaded, so they are not loaded again for each allocation. The
+cache holds the modules for up to `agones.allocator.wasmCacheSize` (default `10`) different `from` and `hash`
+combinations. To roll out a new version of a Wasm module, change its `url` or `hash`, as a module that is replaced at
+the same location without a `hash` is not loaded again until it is removed from the cache, or Agones restarts.
+
+See the {{< ghlink href="examples/allocation-wasm/" >}}allocation-wasm example{{< /ghlink >}} for a plugin that
+allocates a single session on a multi-session `GameServer`.
+
+{{% /feature %}}
 
 ## Allocation Batching
 
