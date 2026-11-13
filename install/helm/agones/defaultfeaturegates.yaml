@@ -33,11 +33,11 @@ FleetAutoscaleRequestMetaData: true
 
 # Alpha features
 RollingUpdateSurge: false
+WasmAllocation: false
 WasmAutoscaler: false
 
 # Dev features
 ProcessorAllocator: false
-WasmAllocation: false
 
 # Example feature
 Example: false

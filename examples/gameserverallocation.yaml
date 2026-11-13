@@ -111,3 +111,20 @@ spec:
       deleteValues:  # removes values from a List's Valules array. Any nonexistant values are ignored.
         - alice
         - bob
+  # [Stage:Alpha]
+  # [FeatureFlag:WasmAllocation]
+  # Wasm plugin to run against the selected GameServer as part of allocation. Optional.
+  # The plugin function is passed the GameServer as JSON, and returns the GameServer as JSON with
+  # any changes that should be applied as part of the allocation.
+  wasm:
+    # The exported function to call in the wasm module, defaults to 'allocate'
+    function: 'allocate'
+    # Config values to pass to the wasm program
+    config:
+      list: freeSessions
+    from:
+      url:
+        # use a service, or direct URL
+        url: "https://example.com/plugin.wasm"
+    # Optional sha256 hash of the wasm module, to verify its integrity (recommended)
+    hash: ""

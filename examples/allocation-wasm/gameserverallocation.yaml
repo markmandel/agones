@@ -1,0 +1,56 @@
+---
+# Copyright Contributors to Agones a Series of LF Projects, LLC.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+#
+# Example GameServerAllocation that uses a Wasm plugin to allocate a single session on a multi-session
+# GameServer. Use fleet.yaml in this directory as the Fleet configuration.
+#
+apiVersion: allocation.agones.dev/v1
+kind: GameServerAllocation
+spec:
+  scheduling: Packed
+  priorities:
+    - type: List
+      key: freeSessions
+      order: Descending  # Prefer GameServers with the fewest free sessions, to pack sessions together.
+  selectors:
+    # First look for an already Allocated GameServer that still has at least one free session.
+    - gameServerState: Allocated
+      matchLabels:
+        agones.dev/fleet: simple-game-server
+      lists:
+        freeSessions:
+          maxAvailable: 2  # With a capacity of 3, at least one session must be left in the List.
+    # Otherwise, allocate a Ready GameServer, which has all of its sessions free.
+    - gameServerState: Ready
+      matchLabels:
+        agones.dev/fleet: simple-game-server
+  # [Stage:Alpha]
+  # [FeatureFlag:WasmAllocation]
+  # Wasm plugin to run against the selected GameServer as part of allocation.
+  # The plugin function is passed the GameServer as JSON, and returns the GameServer as JSON with
+  # any changes that should be applied as part of the allocation.
+  wasm:
+    # The exported function to call in the wasm module, defaults to 'allocate'
+    function: 'allocate'
+    # Config values to pass to the wasm program
+    config:
+      # The List to take a free session from.
+      list: freeSessions
+    from:
+      url:
+        # Direct URL to the wasm plugin
+        url: "https://github.com/agones-dev/agones/raw/refs/heads/main/examples/allocation-wasm/plugin.wasm"

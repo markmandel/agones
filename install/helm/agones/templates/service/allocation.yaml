@@ -307,6 +307,8 @@ spec:
           value: {{ .Values.agones.allocator.allocationBatchWaitTime | quote }}
         - name: MAX_LIST_ITEMS
           value: {{ .Values.gameservers.lists.maxItems | quote }}
+        - name: WASM_CACHE_SIZE
+          value: {{ .Values.agones.allocator.wasmCacheSize | quote }}
         - name: READINESS_SHUTDOWN_DURATION
           value: {{ mul .Values.agones.allocator.readiness.periodSeconds .Values.agones.extensions.readiness.failureThreshold 2 }}s
 {{- $featureGates := include "agones.featureGates" . | fromYaml }}
