@@ -7314,6 +7314,24 @@ map[string]agones.dev/agones/pkg/apis/allocation/v1.ListAction
 List actions to perform during allocation.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>wasm</code><br/>
+<em>
+<a href="#plugins.agones.dev/v1.WasmPolicy">
+WasmPolicy
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>[Stage:Alpha]
+[FeatureFlag:WasmAllocation]
+Wasm is a Wasm plugin that is run against the selected GameServer during allocation.
+The plugin function is passed the GameServer as JSON, and returns the GameServer as JSON
+with any changes that should be applied as part of the allocation.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -7609,6 +7627,24 @@ map[string]agones.dev/agones/pkg/apis/allocation/v1.ListAction
 <p>[Stage: Beta]
 [FeatureFlag:CountsAndLists]
 List actions to perform during allocation.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>wasm</code><br/>
+<em>
+<a href="#plugins.agones.dev/v1.WasmPolicy">
+WasmPolicy
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>[Stage:Alpha]
+[FeatureFlag:WasmAllocation]
+Wasm is a Wasm plugin that is run against the selected GameServer during allocation.
+The plugin function is passed the GameServer as JSON, and returns the GameServer as JSON
+with any changes that should be applied as part of the allocation.</p>
 </td>
 </tr>
 </tbody>
@@ -9670,6 +9706,7 @@ URLConfiguration
 </h3>
 <p>
 (<em>Appears on:</em>
+<a href="#allocation.agones.dev/v1.GameServerAllocationSpec">GameServerAllocationSpec</a>, 
 <a href="#autoscaling.agones.dev/v1.FleetAutoscalerPolicy">FleetAutoscalerPolicy</a>)
 </p>
 <p>

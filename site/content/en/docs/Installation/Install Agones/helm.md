@@ -352,6 +352,14 @@ The following tables lists the configurable parameters of the Agones chart and t
 | `agones.allocator.env` | Additional [environment variables](https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/) to inject into the allocator pod | `[]` |
 | `agones.allocator.processor.env` | Additional [environment variables](https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/) to inject into the allocator processor pod | `[]` |
 
+{{% feature publishVersion="1.63.0" %}}
+
+| Parameter | Description | Default |
+| --------- | ----------- | ------- |
+| `agones.allocator.wasmCacheSize` | (Alpha, "WasmAllocation" feature flag) The maximum number of compiled Wasm modules for [Wasm Allocation]({{< ref "/docs/Reference/gameserverallocation.md#wasm-allocation" >}}) to keep in memory, per allocation process. Used by the extensions, allocator and processor | `10` |
+
+{{% /feature %}}
+
 
 
 ### Extensions

@@ -135,6 +135,8 @@ spec:
           value: {{ .Values.agones.extensions.allocationBatchWaitTime | quote }}
         - name: MAX_LIST_ITEMS
           value: {{ .Values.gameservers.lists.maxItems | quote }}
+        - name: WASM_CACHE_SIZE
+          value: {{ .Values.agones.allocator.wasmCacheSize | quote }}
         - name: CLOUD_PRODUCT
           value: {{ .Values.agones.cloudProduct | quote }}
 {{- if .Values.agones.extensions.persistentLogs }}

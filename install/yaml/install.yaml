@@ -20892,6 +20892,8 @@ spec:
           value: "500ms"
         - name: MAX_LIST_ITEMS
           value: "1000"
+        - name: WASM_CACHE_SIZE
+          value: "10"
         - name: CLOUD_PRODUCT
           value: "auto"
         - name: LOG_DIR
@@ -21154,6 +21156,8 @@ spec:
           value: "500ms"
         - name: MAX_LIST_ITEMS
           value: "1000"
+        - name: WASM_CACHE_SIZE
+          value: "10"
         - name: READINESS_SHUTDOWN_DURATION
           value: 18s
         ports:

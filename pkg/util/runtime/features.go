@@ -73,6 +73,9 @@ const (
 	// rolling update, even when the inactive GameServerSets hold Allocated GameServers.
 	FeatureRollingUpdateSurge Feature = "RollingUpdateSurge"
 
+	// FeatureWasmAllocation is a feature flag to enable/disable Wasm plugins that run as part of allocation.
+	FeatureWasmAllocation Feature = "WasmAllocation"
+
 	// FeatureWasmAutoscaler is a feature flag to enable/disable the script based autoscaler.
 	FeatureWasmAutoscaler Feature = "WasmAutoscaler"
 
@@ -81,9 +84,6 @@ const (
 
 	// FeatureProcessorAllocator is a feature flag to enable/disable the processor allocator feature.
 	FeatureProcessorAllocator = "ProcessorAllocator"
-
-	// FeatureWasmAllocation is a feature flag to enable/disable Wasm plugins that run as part of allocation.
-	FeatureWasmAllocation Feature = "WasmAllocation"
 
 	////////////////
 	// Example feature
@@ -165,11 +165,11 @@ var (
 
 		// Alpha features
 		FeatureRollingUpdateSurge: false,
+		FeatureWasmAllocation:     false,
 		FeatureWasmAutoscaler:     false,
 
 		// Dev features
 		FeatureProcessorAllocator: false,
-		FeatureWasmAllocation:     false,
 
 		// Example feature
 		FeatureExample: false,
