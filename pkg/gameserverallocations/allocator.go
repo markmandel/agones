@@ -136,7 +136,10 @@ type request struct {
 type response struct {
 	request request
 	gs      *agonesv1.GameServer
-	err     error
+	// original is the GameServer as it is in the allocation cache, which is never modified, so it can be put back
+	// in the cache if the allocation fails.
+	original *agonesv1.GameServer
+	err      error
 }
 
 // NewAllocator creates an instance of Allocator
@@ -604,7 +607,7 @@ func (c *Allocator) ListenAndAllocate(ctx context.Context, updateWorkerCount int
 				continue
 			}
 
-			updateQueue <- response{request: req, gs: gs.DeepCopy(), err: nil}
+			updateQueue <- response{request: req, gs: gs.DeepCopy(), original: gs, err: nil}
 
 		case <-ctx.Done():
 			return
@@ -633,10 +636,10 @@ func (c *Allocator) allocationUpdateWorkers(ctx context.Context, workerCount int
 					gs, err := c.applyAllocationToGameServer(ctx, res.request.gsa.Spec.MetaPatch, res.gs, res.request.gsa)
 					if err != nil {
 						if !k8serrors.IsConflict(err) {
-							// since we could not allocate, we should put it back
+							// since we could not allocate, we should put it back as it was
 							// but not if it's a conflict, as the cache is no longer up to date, and
 							// we should wait for it to get updated with fresh info.
-							c.allocationCache.AddGameServer(gs)
+							c.allocationCache.AddGameServer(res.original)
 						}
 						if goErrors.Is(err, ErrWasmPlugin) {
 							res.err = err
@@ -672,12 +675,6 @@ func (c *Allocator) tryRespondWithError(req request, err error) {
 // applyAllocationToGameServer patches the inputted GameServer with the allocation metadata changes, and updates it to the Allocated State.
 // Returns the updated GameServer.
 func (c *Allocator) applyAllocationToGameServer(ctx context.Context, mp allocationv1.MetaPatch, gs *agonesv1.GameServer, gsa *allocationv1.GameServerAllocation) (*agonesv1.GameServer, error) {
-	// keep the original, so if the Wasm plugin fails, the GameServer can be returned to the cache as it was.
-	var original *agonesv1.GameServer
-	if gsa.Spec.Wasm != nil {
-		original = gs.DeepCopy()
-	}
-
 	// patch ObjectMeta labels
 	if mp.Labels != nil {
 		if gs.ObjectMeta.Labels == nil {
@@ -718,7 +715,7 @@ func (c *Allocator) applyAllocationToGameServer(ctx context.Context, mp allocati
 	if gsa.Spec.Wasm != nil {
 		gs, err = c.applyWasmPolicy(ctx, gsa.Spec.Wasm, gs)
 		if err != nil {
-			return original, err
+			return nil, err
 		}
 	}
 

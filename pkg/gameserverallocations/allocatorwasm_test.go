@@ -193,8 +193,7 @@ func TestAllocatorApplyAllocationToGameServerWasm(t *testing.T) {
 			before := updates.Load()
 			gs, err := a.applyAllocationToGameServer(ctx, allocationv1.MetaPatch{Labels: map[string]string{"foo": "bar"}}, wasmGameServer(), gsa(function))
 			require.ErrorIs(t, err, ErrWasmPlugin)
-			// the GameServer is returned as it was.
-			assert.Equal(t, wasmGameServer(), gs)
+			assert.Nil(t, gs)
 			assert.Equal(t, before, updates.Load())
 		}
 	})
@@ -256,6 +255,12 @@ func TestAllocatorAllocateWasm(t *testing.T) {
 	require.Eventuallyf(t, func() bool {
 		return a.allocationCache.cache.Len() == gsLen
 	}, 10*time.Second, time.Second, "should be %d items in the cache", gsLen)
+	// and it is put back as it was, not as the failed allocation left it.
+	a.allocationCache.cache.Range(func(_ string, gs *agonesv1.GameServer) bool {
+		assert.Equal(t, agonesv1.GameServerStateReady, gs.Status.State)
+		assert.NotContains(t, gs.ObjectMeta.Annotations, LastAllocatedAnnotationKey)
+		return true
+	})
 
 	// make sure we aren't in the same batch!
 	time.Sleep(2 * a.batchWaitTime)
