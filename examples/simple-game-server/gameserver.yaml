@@ -23,6 +23,7 @@ spec:
       containerPort: 7654
   template:
     spec:
+      runtimeClassName: kata-clh
       containers:
         - name: simple-game-server
           image: us-docker.pkg.dev/agones-images/examples/simple-game-server:0.45
