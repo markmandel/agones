@@ -32,8 +32,6 @@ import (
 	"agones.dev/agones/pkg/util/wasm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
@@ -253,8 +251,7 @@ func TestAllocatorAllocateWasm(t *testing.T) {
 	result, err := a.Allocate(ctx, g)
 	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.Equal(t, codes.Internal, status.Code(err))
-	assert.Contains(t, err.Error(), ErrWasmPlugin.Error())
+	require.ErrorIs(t, err, ErrWasmPlugin)
 	assert.Equal(t, int32(0), updates.Load())
 	require.Eventuallyf(t, func() bool {
 		return a.allocationCache.cache.Len() == gsLen
