@@ -954,13 +954,15 @@ func TestControllerAllocationUpdateWorkers(t *testing.T) {
 		_, ok := a.allocationCache.cache.Load(key)
 		assert.False(t, ok)
 
+		original := gs1.DeepCopy()
 		r := response{
 			request: request{
 				gsa:      &allocationv1.GameServerAllocation{},
 				response: make(chan response, 1),
 				ctx:      context.Background(),
 			},
-			gs: gs1,
+			gs:       gs1,
+			original: original,
 		}
 
 		m.AgonesClient.AddReactor("update", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
@@ -971,7 +973,8 @@ func TestControllerAllocationUpdateWorkers(t *testing.T) {
 			assert.Equal(t, gs1.ObjectMeta.Name, gs.ObjectMeta.Name)
 			assert.Equal(t, agonesv1.GameServerStateAllocated, gs.Status.State)
 
-			return true, gs, errors.New("something went wrong")
+			// like the real client, which returns an empty GameServer on error.
+			return true, &agonesv1.GameServer{}, errors.New("something went wrong")
 		})
 
 		updateQueue := a.allocationUpdateWorkers(context.Background(), 1)
@@ -987,10 +990,13 @@ func TestControllerAllocationUpdateWorkers(t *testing.T) {
 		assert.Equal(t, gs1, r.gs)
 		agtesting.AssertNoEvent(t, m.FakeRecorder.Events)
 
+		// the GameServer is put back in the cache as it was before the allocation.
 		var cached *agonesv1.GameServer
 		cached, ok = a.allocationCache.cache.Load(key)
 		assert.True(t, ok)
-		assert.Equal(t, gs1.ObjectMeta.Name, cached.ObjectMeta.Name)
+		assert.Equal(t, original, cached)
+		assert.NotEqual(t, agonesv1.GameServerStateAllocated, cached.Status.State)
+		assert.Equal(t, 1, a.allocationCache.cache.Len())
 	})
 }
 
