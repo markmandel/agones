@@ -288,13 +288,11 @@ func (c *Allocator) allocateFromLocalCluster(ctx context.Context, gsa *allocatio
 		return err
 	})
 
-	if goErrors.Is(err, ErrWasmPlugin) {
-		// the cache is still correct, as the GameServer was not updated, so there is no need to resync.
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
 	if err != nil && !goErrors.Is(err, ErrNoGameServer) && !goErrors.Is(err, ErrConflictInGameServerSelection) {
-		c.allocationCache.Resync()
+		// a Wasm plugin failure leaves the GameServer unchanged in the cache, so there is nothing to resync.
+		if !goErrors.Is(err, ErrWasmPlugin) {
+			c.allocationCache.Resync()
+		}
 		return nil, err
 	}
 
