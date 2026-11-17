@@ -17,6 +17,8 @@ kind: GameServer
 metadata:
   generateName: simple-game-server-
 spec:
+  health:
+    initialDelaySeconds: 60
   ports:
     - name: default
       portPolicy: Dynamic
