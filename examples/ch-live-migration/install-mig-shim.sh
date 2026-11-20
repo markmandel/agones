@@ -13,21 +13,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Build the Kata shim from a kata-containers checkout and install it on every node of the
-# `migration` minikube profile as a separate `kata-clh-mig` runtime class, leaving the stock
-# `kata-clh` class untouched as a control. Run from the host. Re-run after shim changes
-# (only new pods pick up a new shim binary).
-# Usage: install-mig-shim.sh [path-to-kata-containers]   (default ~/workspace/kata-containers)
+# Build the Kata shim from a kata-containers checkout (and cloud-hypervisor from a CH checkout)
+# and install them on every node of the `migration` minikube profile as a separate
+# `kata-clh-mig` runtime class, leaving the stock `kata-clh` class untouched as a control. Run
+# from the host. Re-run after changes (only new pods pick up new binaries).
+# Usage: install-mig-shim.sh [kata-containers dir] [cloud-hypervisor dir]
+#   defaults ~/workspace/kata-containers and ~/workspace/cloud-hypervisor (skipped if missing)
 set -euo pipefail
 KATA=${1:-$HOME/workspace/kata-containers}
+CHDIR=${2:-$HOME/workspace/cloud-hypervisor}
 P=migration
 
 make -C "$KATA/src/runtime" containerd-shim-v2 >/dev/null
 "$KATA/src/runtime/containerd-shim-kata-v2" --version
+CHBIN=
+if [ -d "$CHDIR" ]; then
+  # Static glibc build: the nodes run Buildroot, and a musl build needs musl-gcc for zstd-sys.
+  (cd "$CHDIR" && RUSTFLAGS="-C target-feature=+crt-static" cargo build -q --release \
+    --target x86_64-unknown-linux-gnu -p cloud-hypervisor --bin cloud-hypervisor)
+  CHBIN=$CHDIR/target/x86_64-unknown-linux-gnu/release/cloud-hypervisor
+  "$CHBIN" --version
+fi
 
 for node in $(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); do
   echo "== $node"
   minikube -p $P cp "$KATA/src/runtime/containerd-shim-kata-v2" "$node:/home/docker/containerd-shim-kata-mig-v2"
+  [ -n "$CHBIN" ] && minikube -p $P cp "$CHBIN" "$node:/home/docker/cloud-hypervisor-mig"
   minikube -p $P cp "$(dirname "$0")/install-mig-shim-node.sh" "$node:/home/docker/install-mig-shim-node.sh"
   # Run a copied script: `minikube ssh` never closes stdin, so `bash -s` with a heredoc hangs.
   minikube -p $P ssh -n "$node" -- "sudo bash /home/docker/install-mig-shim-node.sh"

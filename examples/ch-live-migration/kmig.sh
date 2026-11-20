@@ -119,19 +119,19 @@ pod-ip)
   # pod-ip <placeholder-id>: the pod IP of a waiting placeholder. kubelet doesn't publish it
   # while CreateContainer blocks, and crictl's status call goes through the busy shim, so read
   # eth0 in the pod netns, where the placeholder's CH runs.
-  ch=$(pgrep -f "^/opt/kata/bin/cloud-hypervisor --api-socket $VMDIR/") || { echo "no CH for $ID" >&2; exit 1; }
+  ch=$(pgrep -f "^/opt/kata/bin/cloud-hypervisor(-mig)? --api-socket $VMDIR/") || { echo "no CH for $ID" >&2; exit 1; }
   nsenter -t "$ch" -n ip -4 -o addr show eth0 | awk '{print $4}' | cut -d/ -f1
   ;;
 outage)
-  # outage - <unplug-time>: from the src/dst probe logs, the gap between the last reply from the
+  # outage - <start-time>: from the src/dst probe logs, the gap between the last reply from the
   # source pod IP and the first reply from the destination pod IP.
   awk -v t0="$3" '
     function sec(t,  a) { split(t, a, ":"); return a[1] * 3600 + a[2] * 60 + a[3] }
     FILENAME ~ /src/ && /boot=/ { last = $1 }
     FILENAME ~ /dst/ && /boot=/ && !first { first = $1; line = $0 }
     END {
-      printf "unplug %s, last pod 1 reply %s, first pod 2 reply %s\n", t0, last, first
-      printf "outage: %.2fs (last pod 1 reply -> first pod 2 reply), %.2fs from unplug\n", sec(first) - sec(last), sec(first) - sec(t0)
+      printf "start %s, last pod 1 reply %s, first pod 2 reply %s\n", t0, last, first
+      printf "outage: %.2fs (last pod 1 reply -> first pod 2 reply), %.2fs from start\n", sec(first) - sec(last), sec(first) - sec(t0)
       print "first pod 2 reply: " line
     }' $W/kprobe-src.log $W/kprobe-dst.log
   ;;

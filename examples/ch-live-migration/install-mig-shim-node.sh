@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Node-side half of install-mig-shim.sh, run as root on a node: installs the shim copied to
-# /home/docker and, the first time, the kata-clh-mig config and containerd runtime.
+# Node-side half of install-mig-shim.sh, run as root on a node: installs the shim (and CH, if
+# copied) from /home/docker and, the first time, the kata-clh-mig config and containerd runtime.
 set -e
 DEF=/opt/kata/share/defaults/kata-containers/runtimes
 install -m 0755 /home/docker/containerd-shim-kata-mig-v2 /opt/kata/bin/containerd-shim-kata-mig-v2
@@ -24,6 +24,24 @@ if [ ! -d $DEF/clh-mig ]; then
   mkdir -p $DEF/clh-mig/config.d
   printf '[agent.kata]\ndebug_console_enabled = true\n' >$DEF/clh-mig/config.d/90-debug-console.toml
 fi
+if [ -f /home/docker/cloud-hypervisor-mig ]; then
+  # Copy then rename: running VMs keep the old binary's inode.
+  install -m 0755 /home/docker/cloud-hypervisor-mig /opt/kata/bin/.cloud-hypervisor-mig.new
+  mv /opt/kata/bin/.cloud-hypervisor-mig.new /opt/kata/bin/cloud-hypervisor-mig
+  cat >$DEF/clh-mig/config.d/80-cloud-hypervisor.toml <<'TOML'
+[hypervisor.clh]
+path = "/opt/kata/bin/cloud-hypervisor-mig"
+valid_hypervisor_paths = ["/opt/kata/bin/cloud-hypervisor", "/opt/kata/bin/cloud-hypervisor-mig"]
+TOML
+  /opt/kata/bin/cloud-hypervisor-mig --version
+fi
+# Gratuitous ARP when the agent re-targets and brings up a migrated NIC, so the new node learns
+# the pod's MAC right away instead of on the next ARP retry (~1s). Lives in guest memory, so it
+# migrates with the VM. kernel_params replaces the base value, so repeat it.
+cat >$DEF/clh-mig/config.d/85-arp-notify.toml <<'TOML'
+[hypervisor.clh]
+kernel_params = "cgroup_no_v1=all systemd.unified_cgroup_hierarchy=1 sysctl.net.ipv4.conf.all.arp_notify=1 sysctl.net.ipv4.conf.default.arp_notify=1"
+TOML
 mkdir -p /etc/containerd/conf.d
 # pod_annotations: Kata's own, plus the live-migration receive-mode annotations.
 cat >/tmp/kata-clh-mig.toml <<TOML
