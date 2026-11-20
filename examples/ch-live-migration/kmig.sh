@@ -28,6 +28,7 @@
 #   any: kmig.sh info <id>
 #   any: kmig.sh cleanup <id>      undo this script's state on this node and thaw the shim
 #   dst: kmig.sh bridge-in - [port] [unix-path]   pod 1 -> pod 2 (receive-mode shim): TCP -> CH
+#   src: kmig.sh migrate-out <id> <dst-ip> [port]  pod 1 -> pod 2: the source shim sends its VM
 #   dst: kmig.sh diff-recv <placeholder-id> [port]   pod 1 -> pod 2: start once it's waiting
 #   src: kmig.sh diff-send <id> <dst-ip> [port]      pod 1 -> pod 2: container writable layers
 set -u
@@ -164,6 +165,12 @@ send)
   setsid nohup socat UNIX-LISTEN:$W/kout.sock,fork TCP:$3:${4:-6000} >$W/ksocat.log 2>&1 </dev/null &
   wait_sock $W/kout.sock || exit 1
   $CHR --api-socket "$(src_api)" send-migration destination_url=unix:$W/kout.sock
+  ;;
+migrate-out)
+  # migrate-out <id> <dst-ip> [port]: ask the source pod's (kata-clh-mig) shim to live-migrate its
+  # VM to a waiting placeholder. Returns when the migration finished (200) or failed (500).
+  curl -sS --max-time 660 --unix-socket "/run/vc/sbs/$ID/shim-monitor.sock" -X POST \
+    "http://localhost/migrate?dest=$3:${4:-6000}" -w "HTTP %{http_code}\n"
   ;;
 bridge-in)
   # bridge-in - [port] [unix-path]: for a receive-mode placeholder pod (kata-clh-mig shim). Its
