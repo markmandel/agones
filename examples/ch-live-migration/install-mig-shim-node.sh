@@ -24,19 +24,23 @@ if [ ! -d $DEF/clh-mig ]; then
   mkdir -p $DEF/clh-mig/config.d
   printf '[agent.kata]\ndebug_console_enabled = true\n' >$DEF/clh-mig/config.d/90-debug-console.toml
 fi
-if [ ! -f /etc/containerd/conf.d/kata-clh-mig.toml ]; then
-  mkdir -p /etc/containerd/conf.d
-  cat >/etc/containerd/conf.d/kata-clh-mig.toml <<TOML
+mkdir -p /etc/containerd/conf.d
+# pod_annotations: Kata's own, plus the live-migration receive-mode annotations.
+cat >/tmp/kata-clh-mig.toml <<TOML
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-clh-mig]
 runtime_type = "io.containerd.kata-clh-mig.v2"
 runtime_path = "/opt/kata/bin/containerd-shim-kata-mig-v2"
 privileged_without_host_devices = true
-pod_annotations = ["io.katacontainers.*"]
+pod_annotations = ["io.katacontainers.*", "migrate.agones.dev/*"]
 container_annotations = ["io.kubernetes.container.terminationMessage*"]
 
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-clh-mig.options]
 ConfigPath = "$DEF/clh-mig/configuration-clh-mig.toml"
 TOML
+RESTART=
+if ! cmp -s /tmp/kata-clh-mig.toml /etc/containerd/conf.d/kata-clh-mig.toml; then
+  mv /tmp/kata-clh-mig.toml /etc/containerd/conf.d/kata-clh-mig.toml
+  RESTART=1
 fi
 # minikube's config.toml has an explicit imports list (kata-deploy adds to it), so the conf.d
 # glob containerd shows in `config dump` isn't in effect: add our drop-in explicitly.
@@ -44,6 +48,9 @@ fi
 if ! grep -q 'conf.d/kata-clh-mig.toml' /etc/containerd/config.toml; then
   sed -i 's|^imports = \[\(.*\)\]$|imports = [\1, "/etc/containerd/conf.d/kata-clh-mig.toml"]|' \
     /etc/containerd/config.toml
+  RESTART=1
+fi
+if [ -n "$RESTART" ]; then
   systemctl restart containerd
   echo "containerd restarted"
 fi
