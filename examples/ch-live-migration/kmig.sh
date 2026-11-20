@@ -106,16 +106,37 @@ diff-recv)
   echo "diff received into ${SHARED%/shared}/mounts"
   ;;
 probe)
-  # probe <id> <ip>: one UDP request every ~0.4s to $W/kprobe.log until probe-stop.
-  echo $$ >$W/kprobe.pid
+  # probe <name> <ip>: UDP request about every 0.1s (0.2s when unanswered), timestamped, to
+  # $W/kprobe-<name>.log until probe-stop <name>. Several can run at once.
+  echo $$ >$W/kprobe-$ID.pid
   while true; do
     printf '%s %s\n' "$(date +%T.%3N)" \
-      "$(echo ping | timeout 0.3 socat -T0.25 - UDP:$3:7777 2>/dev/null || true)"
-    sleep 0.1
-  done >$W/kprobe.log 2>&1
+      "$(echo ping | timeout 0.2 socat -T0.15 - UDP:$3:7777 2>/dev/null || true)"
+    sleep 0.05
+  done >$W/kprobe-$ID.log 2>&1
+  ;;
+pod-ip)
+  # pod-ip <placeholder-id>: the pod IP of a waiting placeholder. kubelet doesn't publish it
+  # while CreateContainer blocks, and crictl's status call goes through the busy shim, so read
+  # eth0 in the pod netns, where the placeholder's CH runs.
+  ch=$(pgrep -f "^/opt/kata/bin/cloud-hypervisor --api-socket $VMDIR/") || { echo "no CH for $ID" >&2; exit 1; }
+  nsenter -t "$ch" -n ip -4 -o addr show eth0 | awk '{print $4}' | cut -d/ -f1
+  ;;
+outage)
+  # outage - <unplug-time>: from the src/dst probe logs, the gap between the last reply from the
+  # source pod IP and the first reply from the destination pod IP.
+  awk -v t0="$3" '
+    function sec(t,  a) { split(t, a, ":"); return a[1] * 3600 + a[2] * 60 + a[3] }
+    FILENAME ~ /src/ && /boot=/ { last = $1 }
+    FILENAME ~ /dst/ && /boot=/ && !first { first = $1; line = $0 }
+    END {
+      printf "unplug %s, last pod 1 reply %s, first pod 2 reply %s\n", t0, last, first
+      printf "outage: %.2fs (last pod 1 reply -> first pod 2 reply), %.2fs from unplug\n", sec(first) - sec(last), sec(first) - sec(t0)
+      print "first pod 2 reply: " line
+    }' $W/kprobe-src.log $W/kprobe-dst.log
   ;;
 probe-stop)
-  [ -f $W/kprobe.pid ] && kill "$(cat $W/kprobe.pid)" 2>/dev/null; rm -f $W/kprobe.pid
+  [ -f $W/kprobe-$ID.pid ] && kill "$(cat $W/kprobe-$ID.pid)" 2>/dev/null; rm -f $W/kprobe-$ID.pid
   ;;
 dst)
   mkdir -p "$VMDIR" "$SHARED"
