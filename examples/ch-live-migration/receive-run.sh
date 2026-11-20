@@ -37,7 +37,6 @@ C=$(on $N1 crictl ps --pod "$S" --name guest -q --no-trunc | tr -d '\r')
 echo "source sandbox $S, guest $C, ip $SIP"
 on $N1 "bash -c 'echo before: \$(echo ping | timeout 2 socat -T1 - UDP:$SIP:7777)'"
 
-on $N1 bash $K unplug "$S"
 on $N1 bash $K freeze "$S"
 on $N2 "bash -c 'ss -tln | grep -q \":6000 \" || bash $K bridge-in - 6000'"
 
@@ -57,11 +56,23 @@ on $N1 bash $K diff-send "$S" $N2IP 6101
 sleep 1
 on $N2 cat /tmp/mig/kdiff.log
 
+# Network outage: probe the source pod IP and the placeholder's pod IP (assigned already, while it
+# waits) from node 1. The NIC is unplugged as late as possible: just before the send, since CH
+# sends the device config at the start of a migration.
+DIP=$(on $N2 bash $K pod-ip "$D" | tr -d '\r')
+[ -n "$DIP" ] || { echo "placeholder has no pod IP"; exit 1; }
+echo "placeholder pod IP $DIP"
+for p in src:$SIP dst:$DIP; do
+  on $N1 "bash -c '(setsid nohup bash $K probe ${p%%:*} ${p#*:} >/dev/null 2>&1 </dev/null &)'"
+done
+sleep 2
+T0=$(on $N1 date +%T.%3N | tr -d '\r')
+on $N1 bash $K unplug "$S"
 on $N1 bash $K send "$S" $N2IP 6000
 kubectl wait pod/mig-dst --for=condition=Ready --timeout=60s >/dev/null
-DIP=$(kubectl get pod mig-dst -o jsonpath='{.status.podIP}')
+sleep 3
+on $N1 bash $K probe-stop src
+on $N1 bash $K probe-stop dst
 kubectl get pod mig-src mig-dst -o wide
-for _ in 1 2 3; do
-  on $N2 "bash -c 'echo after, at pod 2 IP $DIP: \$(echo ping | timeout 2 socat -T1 - UDP:$DIP:7777)'"
-  sleep 1
-done
+on $N1 "bash -c 'echo after, at pod 2 IP $DIP: \$(echo ping | timeout 2 socat -T1 - UDP:$DIP:7777)'"
+on $N1 bash $K outage - "$T0"
