@@ -37,7 +37,6 @@ C=$(on $N1 crictl ps --pod "$S" --name guest -q --no-trunc | tr -d '\r')
 echo "source sandbox $S, guest $C, ip $SIP"
 on $N1 "bash -c 'echo before: \$(echo ping | timeout 2 socat -T1 - UDP:$SIP:7777)'"
 
-on $N1 bash $K freeze "$S"
 on $N2 "bash -c 'ss -tln | grep -q \":6000 \" || bash $K bridge-in - 6000'"
 
 on $N2 rm -f /run/vc/migrate-in.sock   # a stale socket would look like a waiting placeholder
@@ -69,7 +68,7 @@ T0=$(on $N1 date +%T.%3N | tr -d '\r')
 # With CH's receive-migration net_fds support the NIC stays attached and the placeholder supplies
 # its own tap. UNPLUG=1 uses the earlier workaround (unplug the source NIC first) for comparison.
 if [ "${UNPLUG:-0}" = 1 ]; then on $N1 bash $K unplug "$S"; fi
-on $N1 bash $K send "$S" $N2IP 6000
+on $N1 bash $K migrate-out "$S" $N2IP 6000
 kubectl wait pod/mig-dst --for=condition=Ready --timeout=60s >/dev/null
 sleep 3
 on $N1 bash $K probe-stop src
@@ -77,3 +76,10 @@ on $N1 bash $K probe-stop dst
 kubectl get pod mig-src mig-dst -o wide
 on $N1 "bash -c 'echo after, at pod 2 IP $DIP: \$(echo ping | timeout 2 socat -T1 - UDP:$DIP:7777)'"
 on $N1 bash $K outage - "$T0"
+
+# Pod 1 after the migration: its shim keeps the containers "running" (so kubelet doesn't restart
+# them there) until the pod is deleted, then tears down without an agent.
+sleep 5
+kubectl get pod mig-src -o jsonpath='{"pod 1 after migration: "}{.status.phase}{", restarts "}{.status.containerStatuses[0].restartCount}{"\n"}'
+time kubectl delete pod mig-src --wait=true --timeout=60s
+on $N1 "bash -c 'echo pod 2 after deleting pod 1: \$(echo ping | timeout 2 socat -T1 - UDP:$DIP:7777)'"
