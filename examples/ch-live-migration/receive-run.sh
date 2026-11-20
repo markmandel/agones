@@ -57,8 +57,7 @@ sleep 1
 on $N2 cat /tmp/mig/kdiff.log
 
 # Network outage: probe the source pod IP and the placeholder's pod IP (assigned already, while it
-# waits) from node 1. The NIC is unplugged as late as possible: just before the send, since CH
-# sends the device config at the start of a migration.
+# waits) from node 1, around the send.
 DIP=$(on $N2 bash $K pod-ip "$D" | tr -d '\r')
 [ -n "$DIP" ] || { echo "placeholder has no pod IP"; exit 1; }
 echo "placeholder pod IP $DIP"
@@ -67,7 +66,9 @@ for p in src:$SIP dst:$DIP; do
 done
 sleep 2
 T0=$(on $N1 date +%T.%3N | tr -d '\r')
-on $N1 bash $K unplug "$S"
+# With CH's receive-migration net_fds support the NIC stays attached and the placeholder supplies
+# its own tap. UNPLUG=1 uses the earlier workaround (unplug the source NIC first) for comparison.
+if [ "${UNPLUG:-0}" = 1 ]; then on $N1 bash $K unplug "$S"; fi
 on $N1 bash $K send "$S" $N2IP 6000
 kubectl wait pod/mig-dst --for=condition=Ready --timeout=60s >/dev/null
 sleep 3
