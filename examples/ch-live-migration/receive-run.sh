@@ -16,13 +16,19 @@
 # Pod 1 -> pod 2 live migration with the receive-mode shim (kata-clh-mig), run from the host.
 # Starts a fresh mig-src on node 1, freezes it, creates the mig-dst placeholder on node 2, copies
 # the writable layers while it waits, sends the VM, then checks the workload at pod 2's IP.
-# Needs install-mig-shim.sh, the ch-mig-guest:0.1 image, and kmig.sh in /home/docker on both nodes.
+# Needs install-mig-shim.sh and the ch-mig-guest:0.1 image loaded (see the plan's rebuild steps).
 set -euo pipefail
 cd "$(dirname "$0")"
 P=migration N1=migration N2=migration-m02 N2IP=192.168.39.241
 K=/home/docker/kmig.sh
 on() { local n=$1; shift; minikube -p $P ssh -n "$n" -- "sudo $*"; }
 pod() { python3 -I -c "print(open('receive-pods.yaml').read().split('---')[$1])"; }
+
+# Fresh nodes: the work dir and the node-side script.
+for n in $N1 $N2; do
+  on $n mkdir -p /tmp/mig
+  minikube -p $P cp kmig.sh "$n:$K" >/dev/null
+done
 
 # Thaw shims frozen by a previous run, or deleting their pods hangs.
 for old in $(on $N1 crictl pods --name mig-src -q --no-trunc 2>/dev/null | tr -d '\r'); do
