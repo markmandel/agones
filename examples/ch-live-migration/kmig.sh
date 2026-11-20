@@ -18,12 +18,15 @@
 # debug console enabled. Steps:
 #   src: kmig.sh unplug <id>       remove the Kata NIC (fd-backed, can't migrate)
 #   src: kmig.sh freeze <id>       SIGSTOP the Kata shim so it can't tear down the sandbox
+#   dst: kmig.sh tree-recv <id> [port]       cross-node only: start first, receives shared/
+#   src: kmig.sh tree-send <id> <dst-ip> [port]   cross-node only: copy the shim's shared/ tree
 #   dst: kmig.sh dst <id> [port]   destination virtiofsd + CH, waiting on TCP port
 #   src: kmig.sh send <id> <dst-ip> [port]   via a socat bridge out of the pod netns
 #   dst: kmig.sh revsock <id>      same-node only: move the vsock to a path the source didn't unlink
 #   dst: kmig.sh plug <id> <guest-ip>   hot-add a named tap on brmig, set the guest IP
 #   any: kmig.sh console <id> '<cmd>'   run a command in the guest via the debug console
 #   any: kmig.sh info <id>
+#   any: kmig.sh cleanup <id>      undo this script's state on this node and thaw the shim
 set -u
 CH=/opt/kata/bin/cloud-hypervisor
 VFSD=/opt/kata/libexec/virtiofsd
@@ -46,6 +49,38 @@ freeze)
   ;;
 thaw)
   pid=$(pgrep -f "containerd-shim-kata-v2 .*-id $ID") && kill -CONT $pid && echo "shim $pid continued"
+  ;;
+cleanup)
+  # Undo this script's state for <id> on this node: destination CH/virtiofsd, copied tree,
+  # tap, and thaw the shim (so Kubernetes can delete the pod normally).
+  bash "$0" thaw "$ID" 2>/dev/null
+  for p in $(pgrep -x cloud-hyperviso) $(pgrep -x virtiofsd); do
+    tr '\0' ' ' </proc/$p/cmdline 2>/dev/null | grep -qE "kdst-api.sock|socket-path=$VMDIR" && kill -9 $p
+  done
+  if [ -f $W/kmig-mounts ]; then
+    tac $W/kmig-mounts | while read -r p; do umount "$p" 2>/dev/null; done
+    rm -rf "/run/kata-containers/shared/sandboxes/$ID" "$VMDIR" $W/kmig-mounts
+  fi
+  ip link del tapk 2>/dev/null
+  rm -f $W/kdst-api.sock $W/kvsock.sock $W/kout.sock $W/.kmig-mounts
+  pkill -x socat 2>/dev/null
+  echo "cleaned $ID"
+  ;;
+tree-recv)
+  # Cross-node: receive the shim's shared/ tree at the same path, then re-create each
+  # submount (container rootfs, volume files) as a bind mount onto itself.
+  mkdir -p "$SHARED"
+  socat -u TCP-LISTEN:${3:-6100},reuseaddr - | tar -x -C "$SHARED" --numeric-owner
+  mv "$SHARED/.kmig-mounts" $W/kmig-mounts
+  while read -r p; do mount --bind "$p" "$p" || echo "bind failed: $p"; done <$W/kmig-mounts
+  echo "received $(du -sh "$SHARED" | cut -f1), $(wc -l <$W/kmig-mounts) submounts"
+  ;;
+tree-send)
+  # tree-send <id> <dst-ip> [port]: tar the shared/ tree from inside the shim's mount namespace.
+  pid=$(pgrep -f "containerd-shim-kata-v2 .*-id $ID") || { echo "no shim for $ID"; exit 1; }
+  awk '{print $5}' /proc/$pid/mountinfo | grep "^$SHARED/" >$W/.kmig-mounts
+  nsenter -t "$pid" -m tar -cf - --numeric-owner -C "$SHARED" . -C $W .kmig-mounts |
+    socat -u - TCP:$3:${4:-6100}
   ;;
 probe)
   # probe <id> <ip>: one UDP request every ~0.4s to $W/kprobe.log until probe-stop.
@@ -112,5 +147,5 @@ info)
   done
   [ -f $W/kdst-events.json ] && echo "dst: $(grep -o '"event": "[a-z-]*"' $W/kdst-events.json | cut -d'"' -f4 | tr '\n' ' ')"
   ;;
-*) sed -n '16,27p' "$0"; exit 2 ;;
+*) sed -n '16,30p' "$0"; exit 2 ;;
 esac
