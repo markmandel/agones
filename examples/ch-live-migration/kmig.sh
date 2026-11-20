@@ -27,6 +27,9 @@
 #   any: kmig.sh console <id> '<cmd>'   run a command in the guest via the debug console
 #   any: kmig.sh info <id>
 #   any: kmig.sh cleanup <id>      undo this script's state on this node and thaw the shim
+#   dst: kmig.sh bridge-in - [port] [unix-path]   pod 1 -> pod 2 (receive-mode shim): TCP -> CH
+#   dst: kmig.sh diff-recv <placeholder-id> [port]   pod 1 -> pod 2: start once it's waiting
+#   src: kmig.sh diff-send <id> <dst-ip> [port]      pod 1 -> pod 2: container writable layers
 set -u
 CH=/opt/kata/bin/cloud-hypervisor
 VFSD=/opt/kata/libexec/virtiofsd
@@ -44,11 +47,11 @@ unplug)
   $CHR --api-socket "$(src_api)" remove-device _net1 && echo "removed _net1"
   ;;
 freeze)
-  pid=$(pgrep -f "containerd-shim-kata-v2 .*-id $ID") || { echo "no shim for $ID"; exit 1; }
+  pid=$(pgrep -f "^/opt/kata/bin/containerd-shim-kata(-mig)?-v2 .*-id $ID") || { echo "no shim for $ID"; exit 1; }
   kill -STOP $pid && echo "shim $pid stopped"
   ;;
 thaw)
-  pid=$(pgrep -f "containerd-shim-kata-v2 .*-id $ID") && kill -CONT $pid && echo "shim $pid continued"
+  pid=$(pgrep -f "^/opt/kata/bin/containerd-shim-kata(-mig)?-v2 .*-id $ID") && kill -CONT $pid && echo "shim $pid continued"
   ;;
 cleanup)
   # Undo this script's state for <id> on this node: destination CH/virtiofsd, copied tree,
@@ -77,10 +80,30 @@ tree-recv)
   ;;
 tree-send)
   # tree-send <id> <dst-ip> [port]: tar the shared/ tree from inside the shim's mount namespace.
-  pid=$(pgrep -f "containerd-shim-kata-v2 .*-id $ID") || { echo "no shim for $ID"; exit 1; }
+  pid=$(pgrep -f "^/opt/kata/bin/containerd-shim-kata(-mig)?-v2 .*-id $ID") || { echo "no shim for $ID"; exit 1; }
   awk '{print $5}' /proc/$pid/mountinfo | grep "^$SHARED/" >$W/.kmig-mounts
   nsenter -t "$pid" -m tar -cf - --numeric-owner -C "$SHARED" . -C $W .kmig-mounts |
     socat -u - TCP:$3:${4:-6100}
+  ;;
+diff-send)
+  # diff-send <id> <dst-ip> [port]: pod 1 -> pod 2. Send each container's rootfs writable layer
+  # (overlay upperdir: files the container or agent created, e.g. mount points) as a tar
+  # stream per container, with paths prefixed by the source container ID.
+  pid=$(pgrep -f "^/opt/kata/bin/containerd-shim-kata(-mig)?-v2 .*-id $ID") || { echo "no shim for $ID"; exit 1; }
+  grep -E " ${SHARED%/shared}/mounts/[^ ]+/rootfs " /proc/$pid/mountinfo |
+    while read -r line; do
+      cid=$(echo "$line" | awk '{print $5}' | sed -E 's|.*/mounts/([^/]+)/rootfs$|\1|')
+      upper=$(echo "$line" | grep -o 'upperdir=[^,]*' | cut -d= -f2)
+      tar -cf - --numeric-owner -C "$upper" --transform "s,^\.,$cid/rootfs," . && echo "$cid $upper" >&2
+    done | socat -u - TCP:$3:${4:-6101}
+  ;;
+diff-recv)
+  # diff-recv <placeholder-sandbox-id> [port]: unpack diff-send's stream into the placeholder's
+  # rootfs mounts (named by source container ID) inside its shim's mount namespace.
+  pid=$(pgrep -f "^/opt/kata/bin/containerd-shim-kata(-mig)?-v2 .*-id $ID") || { echo "no shim for $ID"; exit 1; }
+  socat -u TCP-LISTEN:${3:-6101},reuseaddr - |
+    nsenter -t "$pid" -m tar -xi --numeric-owner -C "${SHARED%/shared}/mounts"
+  echo "diff received into ${SHARED%/shared}/mounts"
   ;;
 probe)
   # probe <id> <ip>: one UDP request every ~0.4s to $W/kprobe.log until probe-stop.
@@ -101,7 +124,7 @@ dst)
   # The Kata shim has its own mount namespace, where shared/ is a read-only bind of mounts/
   # with the container rootfs and volumes under it. On the source node, run virtiofsd there.
   NS=()
-  shim=$(pgrep -f "containerd-shim-kata-v2 .*-id $ID") && NS=(nsenter -t "$shim" -m --)
+  shim=$(pgrep -f "^/opt/kata/bin/containerd-shim-kata(-mig)?-v2 .*-id $ID") && NS=(nsenter -t "$shim" -m --)
   setsid nohup "${NS[@]}" $VFSD --socket-path="$VMDIR/virtiofsd.sock" --shared-dir="$SHARED" --cache=auto \
     --thread-pool-size=1 --announce-submounts --migration-mode=find-paths --log-level=info \
     >$W/kvfsd-dst.log 2>&1 </dev/null &
@@ -120,6 +143,15 @@ send)
   setsid nohup socat UNIX-LISTEN:$W/kout.sock,fork TCP:$3:${4:-6000} >$W/ksocat.log 2>&1 </dev/null &
   wait_sock $W/kout.sock || exit 1
   $CHR --api-socket "$(src_api)" send-migration destination_url=unix:$W/kout.sock
+  ;;
+bridge-in)
+  # bridge-in - [port] [unix-path]: for a receive-mode placeholder pod (kata-clh-mig shim). Its
+  # CH listens on a UNIX socket (the pod netns can't take connections), so accept TCP here.
+  # The <id> argument is unused; pass '-'.
+  setsid nohup socat TCP-LISTEN:${3:-6000},reuseaddr,fork UNIX-CONNECT:${4:-/run/vc/migrate-in.sock} \
+    >$W/kbridge-in.log 2>&1 </dev/null &
+  sleep 0.5
+  ss -tln | grep -q ":${3:-6000} " && echo "bridging tcp:${3:-6000} -> ${4:-/run/vc/migrate-in.sock}"
   ;;
 revsock)
   # Same-node only: when the source CH exits it unlinks its vsock path, which is also the
