@@ -17,12 +17,15 @@
 # Starts a fresh mig-src on node 1, freezes it, creates the mig-dst placeholder on node 2, copies
 # the writable layers while it waits, sends the VM, then checks the workload at pod 2's IP.
 # Needs install-mig-shim.sh and the ch-mig-guest:0.1 image loaded (see the plan's rebuild steps).
+# PODS=<file> picks the pod pair (default receive-pods.yaml); KIND=guest|xonotic the UDP probe,
+# QKIND (default KIND) the one-off before/after query (xonotic-status shows the game state).
 set -euo pipefail
 cd "$(dirname "$0")"
 P=migration N1=migration N2=migration-m02 N2IP=192.168.39.241
 K=/home/docker/kmig.sh
+PODS=${PODS:-receive-pods.yaml} KIND=${KIND:-guest}; QKIND=${QKIND:-$KIND}
 on() { local n=$1; shift; minikube -p $P ssh -n "$n" -- "sudo $*"; }
-pod() { python3 -I -c "print(open('receive-pods.yaml').read().split('---')[$1])"; }
+pod() { python3 -I -c "print(open('$PODS').read().split('---')[$1])"; }
 
 # Fresh nodes: the work dir and the node-side script.
 for n in $N1 $N2; do
@@ -39,9 +42,17 @@ pod 0 | kubectl apply -f - >/dev/null
 kubectl wait pod/mig-src --for=condition=Ready --timeout=120s >/dev/null
 SIP=$(kubectl get pod mig-src -o jsonpath='{.status.podIP}')
 S=$(on $N1 crictl pods --name mig-src --state ready -q --no-trunc | tr -d '\r')
-C=$(on $N1 crictl ps --pod "$S" --name guest -q --no-trunc | tr -d '\r')
-echo "source sandbox $S, guest $C, ip $SIP"
-on $N1 "bash -c 'echo before: \$(echo ping | timeout 2 socat -T1 - UDP:$SIP:7777)'"
+CN=$(kubectl get pod mig-src -o jsonpath='{.spec.containers[0].name}')
+C=$(on $N1 crictl ps --pod "$S" --name "$CN" -q --no-trunc | tr -d '\r')
+echo "source sandbox $S, container $CN $C, ip $SIP"
+q() {   # retried: Xonotic rate-limits getstatus
+  local r; for _ in 1 2 3; do r=$(on $N1 bash $K query - "$1" $QKIND | tr -d '\r'); [ -n "$r" ] && break; sleep 0.6; done
+  echo "$r"
+}
+for _ in $(seq 120); do [ -n "$(q $SIP)" ] && break; sleep 1; done   # e.g. Xonotic loading a map
+sleep ${SETTLE:-0}
+echo "before: $(q $SIP)"
+on $N1 bash $K guest-mem "$S"
 
 on $N2 "bash -c 'ss -tln | grep -q \":6000 \" || bash $K bridge-in - 6000'"
 
@@ -67,7 +78,7 @@ DIP=$(on $N2 bash $K pod-ip "$D" | tr -d '\r')
 [ -n "$DIP" ] || { echo "placeholder has no pod IP"; exit 1; }
 echo "placeholder pod IP $DIP"
 for p in src:$SIP dst:$DIP; do
-  on $N1 "bash -c '(setsid nohup bash $K probe ${p%%:*} ${p#*:} >/dev/null 2>&1 </dev/null &)'"
+  on $N1 "bash -c '(setsid nohup bash $K probe ${p%%:*} ${p#*:} $KIND >/dev/null 2>&1 </dev/null &)'"
 done
 sleep 2
 T0=$(on $N1 date +%T.%3N | tr -d '\r')
@@ -80,7 +91,9 @@ sleep 3
 on $N1 bash $K probe-stop src
 on $N1 bash $K probe-stop dst
 kubectl get pod mig-src mig-dst -o wide
-on $N1 "bash -c 'echo after, at pod 2 IP $DIP: \$(echo ping | timeout 2 socat -T1 - UDP:$DIP:7777)'"
+echo "after, at pod 2 IP $DIP: $(q $DIP)"
+echo "CH migration events (source):"
+on $N1 bash $K mig-events "$S"
 on $N1 bash $K outage - "$T0"
 
 # Pod 1 after the migration: its shim keeps the containers "running" (so kubelet doesn't restart
@@ -88,4 +101,4 @@ on $N1 bash $K outage - "$T0"
 sleep 5
 kubectl get pod mig-src -o jsonpath='{"pod 1 after migration: "}{.status.phase}{", restarts "}{.status.containerStatuses[0].restartCount}{"\n"}'
 time kubectl delete pod mig-src --wait=true --timeout=60s
-on $N1 "bash -c 'echo pod 2 after deleting pod 1: \$(echo ping | timeout 2 socat -T1 - UDP:$DIP:7777)'"
+echo "pod 2 after deleting pod 1: $(q $DIP)"

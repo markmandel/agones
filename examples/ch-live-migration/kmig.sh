@@ -31,13 +31,30 @@
 #   src: kmig.sh migrate-out <id> <dst-ip> [port]  pod 1 -> pod 2: the source shim sends its VM
 #   dst: kmig.sh diff-recv <placeholder-id> [port]   pod 1 -> pod 2: start once it's waiting
 #   src: kmig.sh diff-send <id> <dst-ip> [port]      pod 1 -> pod 2: container writable layers
+#   any: kmig.sh query - <ip> [kind]   one UDP request to the workload (kind: guest, xonotic)
+#   any: kmig.sh mig-events <id>   CH's migration events for a sandbox (memory iterations etc.)
+#   any: kmig.sh guest-mem <id>    guest memory use and the largest processes (debug console)
 set -u
+# udp_query <ip> <kind>: one request, the reply on one line. Kinds: guest (our echo workload on
+# :7777), xonotic (DarkPlaces connectionless ping -> "ack" on :26000, not rate limited, for
+# probes) and xonotic-status (getstatus: map, bots, frags; DarkPlaces answers about one per second
+# per client address, so too coarse for probing).
+udp_query() {
+  case "${2:-guest}" in
+  xonotic) printf '\377\377\377\377ping' | timeout 0.2 socat -T0.15 - UDP:$1:26000 2>/dev/null |
+             tr -d '\377' || true ;;
+  xonotic-status) printf '\377\377\377\377getstatus' | timeout 0.3 socat -T0.25 - UDP:$1:26000 2>/dev/null |
+             tr '\377\n' ' |' || true ;;
+  *) echo ping | timeout 0.2 socat -T0.15 - UDP:$1:7777 2>/dev/null || true ;;
+  esac
+}
 CH=/opt/kata/bin/cloud-hypervisor
 VFSD=/opt/kata/libexec/virtiofsd
 CHR=/tmp/mig/ch-remote
 W=/tmp/mig
 cmd=${1:-}; ID=${2:-}
 VMDIR=/run/vc/vm/$ID
+CLH_EVENTS=clh-events.json
 SHARED=/run/kata-containers/shared/sandboxes/$ID/shared
 
 wait_sock() { for _ in $(seq 50); do [ -S "$1" ] && return 0; sleep 0.1; done; echo "timeout waiting for $1"; return 1; }
@@ -107,12 +124,11 @@ diff-recv)
   echo "diff received into ${SHARED%/shared}/mounts"
   ;;
 probe)
-  # probe <name> <ip>: UDP request about every 0.1s (0.2s when unanswered), timestamped, to
-  # $W/kprobe-<name>.log until probe-stop <name>. Several can run at once.
+  # probe <name> <ip> [kind]: UDP request about every 0.1s (0.2s when unanswered), timestamped,
+  # to $W/kprobe-<name>.log until probe-stop <name>. Several can run at once.
   echo $$ >$W/kprobe-$ID.pid
   while true; do
-    printf '%s %s\n' "$(date +%T.%3N)" \
-      "$(echo ping | timeout 0.2 socat -T0.15 - UDP:$3:7777 2>/dev/null || true)"
+    printf '%s %s\n' "$(date +%T.%3N)" "$(udp_query "$3" "${4:-guest}")"
     sleep 0.05
   done >$W/kprobe-$ID.log 2>&1
   ;;
@@ -128,8 +144,8 @@ outage)
   # source pod IP and the first reply from the destination pod IP.
   awk -v t0="$3" '
     function sec(t,  a) { split(t, a, ":"); return a[1] * 3600 + a[2] * 60 + a[3] }
-    FILENAME ~ /src/ && /boot=/ { last = $1 }
-    FILENAME ~ /dst/ && /boot=/ && !first { first = $1; line = $0 }
+    FILENAME ~ /src/ && /boot=|statusResponse| ack$/ { last = $1 }
+    FILENAME ~ /dst/ && /boot=|statusResponse| ack$/ && !first { first = $1; line = $0 }
     END {
       printf "start %s, last pod 1 reply %s, first pod 2 reply %s\n", t0, last, first
       printf "outage: %.2fs (last pod 1 reply -> first pod 2 reply), %.2fs from start\n", sec(first) - sec(last), sec(first) - sec(t0)
@@ -199,7 +215,20 @@ plug)
 console)
   VS="$VMDIR/clh.sock"; [ -S $W/kvsock.sock ] && VS=$W/kvsock.sock
   { echo "CONNECT 1026"; sleep 1; echo "$3"; sleep 2; } |
-    timeout 6 socat - UNIX-CONNECT:"$VS" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | tail -n +2
+    timeout 6 socat - UNIX-CONNECT:"$VS" 2>/dev/null | sed 's/\x1b\[[0-9;]*[mK]//g' | tail -n +2
+  ;;
+query)
+  # Through $(...): written straight to an ssh tty, timeout's backgrounded socat gets SIGTTOU.
+  echo "$(udp_query "$3" "${4:-guest}")"
+  ;;
+mig-events)
+  # One line per migration event: seconds since the first one, event, properties.
+  tr -d '\n' <"$VMDIR/$CLH_EVENTS" | sed 's/}[[:space:]]*{/}\n{/g' | grep migration |
+    sed -E 's/.*"secs": *([0-9]+), *"nanos": *([0-9]+).*"event": *"([a-z-]+)"(.*"properties": *(\{[^}]*\}|null))?.*/\1 \2 \3 \5/' |
+    awk '{ t = $1 + $2 / 1e9; if (!t0) t0 = t; $1 = sprintf("%7.3fs", t - t0); $2 = ""; print }'
+  ;;
+guest-mem)
+  bash "$0" console "$ID" 'grep --color=never -E "^(MemTotal|MemAvailable|Cached|Shmem|AnonPages):" /proc/meminfo; for p in /proc/[0-9]*; do r=$(grep VmRSS $p/status 2>/dev/null | tr -s " " | cut -d" " -f2); [ -n "$r" ] && echo "$r kB rss $(tr "\0" " " <$p/cmdline | cut -c1-60)"; done | sort -rn | head -4' | grep -v '^root@'
   ;;
 info)
   for s in "$(src_api)" $W/kdst-api.sock; do

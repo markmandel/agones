@@ -68,6 +68,17 @@ if ! grep -q 'conf.d/kata-clh-mig.toml' /etc/containerd/config.toml; then
     /etc/containerd/config.toml
   RESTART=1
 fi
+# systemd disables cpuset on pod slices when no unit asks for it; kubelet (systemd cgroup driver)
+# then sees the pod cgroup as missing and kills Burstable Kata pods' containers on its next sync
+# (kubernetes/kubernetes#131567), about once a minute, and kills a migration placeholder outright.
+# Asking for all CPUs on every kubepods-* slice keeps cpuset enabled without restricting anything.
+D=/etc/systemd/system/kubepods-.slice.d
+CPUSET="[Slice]
+AllowedCPUs=0-$(($(nproc) - 1))"
+if [ "$(cat $D/50-cpuset.conf 2>/dev/null)" != "$CPUSET" ]; then
+  mkdir -p $D && echo "$CPUSET" >$D/50-cpuset.conf && systemctl daemon-reload
+  echo "kubepods cpuset drop-in installed"
+fi
 if [ -n "$RESTART" ]; then
   systemctl restart containerd
   echo "containerd restarted"
