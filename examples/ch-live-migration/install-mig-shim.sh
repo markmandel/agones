@@ -18,7 +18,8 @@
 # `kata-clh-mig` runtime class, leaving the stock `kata-clh` class untouched as a control. Run
 # from the host. Re-run after changes (only new pods pick up new binaries).
 # Usage: install-mig-shim.sh [kata-containers dir] [cloud-hypervisor dir]
-#   defaults ~/workspace/kata-containers and ~/workspace/cloud-hypervisor (skipped if missing)
+#   defaults ~/workspace/kata-containers and ~/workspace/cloud-hypervisor (skipped if missing).
+#   CH >= v55 needs host kernel 6.8; on minikube (6.6) check out the CH fork's v55-kernel-6.6 branch.
 set -euo pipefail
 KATA=${1:-$HOME/workspace/kata-containers}
 CHDIR=${2:-$HOME/workspace/cloud-hypervisor}
